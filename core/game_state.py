@@ -17,6 +17,7 @@ class GameMode(Enum):
     STANDARD = "standard"
     FREE = "free"
     PLANAR = "planar"
+    RACE = "race"
 
 
 class GameScreen(Enum):
@@ -32,6 +33,10 @@ class GameScreen(Enum):
     PLANAR_INTRO = "planar_intro"
     PLANAR_PLAYING = "planar_playing"
     PLANAR_RESULTS = "planar_results"
+    MULTIPLAYER = "multiplayer"
+    LOBBY = "lobby"
+    RACE = "race"
+    RACE_RESULTS = "race_results"
 
 
 @dataclass

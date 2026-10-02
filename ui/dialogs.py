@@ -10,7 +10,8 @@ from core.achievements import BADGE_INFO, AchievementSystem
 from core.constants import (COLORBLIND_SOLVES, DIFFICULTY_CONFIG, DIFFICULTY_ORDER,
                             GRAPH_DISPLAY_NAMES, HINT_COSTS, LEADERBOARD_TOP_N,
                             MAX_HINTS_PER_LEVEL, PALETTE, PALETTE_KEYS, PALETTE_NAMES,
-                            PLANAR_RUN_SECONDS, UI_BG,
+                            PLANAR_RUN_SECONDS, RACE_COLORING, RACE_COUNTDOWN_SECONDS,
+                            RACE_DISQUALIFY_BELOW, RACE_MAX_PLAYERS, RACE_SECONDS, UI_BG,
                             UI_DANGER_TEXT, UI_GOLD, UI_INNER, UI_LIME)
 from core.leaderboard import LeaderboardSystem
 from core.planar_run import format_area
@@ -128,6 +129,22 @@ def guide_html() -> str:
              f"{_hl('area')} (the grid squares enclosed by the drawing), then by the smallest "
              f"total {_hl('box')} (the rectangle that holds the whole drawing). After the run "
              "you see the smallest layout the program found for every graph next to your own."),
+        heading("MULTIPLAYER"),
+        para(f"For up to {RACE_MAX_PLAYERS} players on the same network. One player creates a "
+             f"lobby and tells the others its {_hl('code')}; they pick the lobby from the list "
+             f"and type the code. If the list stays empty, use {_hl('JOIN BY ADDRESS')} with the "
+             "address shown on the host's lobby screen. The host starts the match once two "
+             f"players are in, after a {RACE_COUNTDOWN_SECONDS}-second countdown."),
+        para(f"{_hl('COLORING RACE')} ({RACE_SECONDS[RACE_COLORING] // 60} minutes): everyone "
+             "gets the same graphs in the same order. Color one and the next appears. Score = "
+             f"graphs solved minus skip penalties. {_hl('S')} skips a graph: the first skip costs "
+             "1, the second 2, the third 3 and so on. No hints."),
+        para(f"{_hl('PLANAR DRAWING')} ({PLANAR_RUN_SECONDS // 60} minutes): the same rules as "
+             "the solo run, with no skips. Ranked by graphs solved, then smallest area, then "
+             "smallest box."),
+        para(f"A player who solves nothing is {_hl('disqualified')}, and so is anyone whose "
+             f"score drops below {RACE_DISQUALIFY_BELOW}. If the host leaves, the match ends "
+             "with the standings at that moment."),
         heading("ACCESSORIES"),
         para(f"Every STANDARD difficulty you finish adds its banked score to your "
              f"{_hl('balance')}, which is saved between sessions. Spend it in ACCESSORIES on the "

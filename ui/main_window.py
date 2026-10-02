@@ -7,11 +7,14 @@ from core.game_state import GameScreen, GameState
 from core.settings import Settings
 from ui.accessories import apply_wallet
 from ui.fonts import app_font, load_fonts
+from ui.multiplayer import MultiplayerController
 from ui.screens.difficulty_select_screen import DifficultySelectScreen
 from ui.screens.free_complete_screen import FreeCompleteScreen
 from ui.screens.free_graph_select_screen import FreeGraphSelectScreen
+from ui.screens.lobby_screen import LobbyScreen
 from ui.screens.menu_screen import MenuScreen
 from ui.screens.mode_select_screen import ModeSelectScreen
+from ui.screens.multiplayer_screen import MultiplayerScreen
 from ui.screens.planar_intro_screen import PlanarIntroScreen
 from ui.screens.planar_results_screen import PlanarResultsScreen
 from ui.screens.planar_screen import PlanarScreen
@@ -19,6 +22,8 @@ from ui.screens.playing_screen import PlayingScreen
 from ui.screens.post_difficulty_screen import PostDifficultyScreen
 from ui.screens.post_level_screen import PostLevelScreen
 from ui.screens.pre_game_screen import PreGameScreen
+from ui.screens.race_results_screen import RaceResultsScreen
+from ui.screens.race_screen import RaceScreen
 from ui.styles import PAGE_MARGIN, get_stylesheet
 from ui.widgets.pixel import PixelBackground
 
@@ -51,6 +56,7 @@ class MainWindow(QMainWindow):
         page.addWidget(self.stacked_widget)
         self.setCentralWidget(background)
 
+        self.multiplayer = MultiplayerController(self)
         self.screens = {
             GameScreen.MENU: MenuScreen(self),
             GameScreen.MODE_SELECT: ModeSelectScreen(self),
@@ -64,6 +70,10 @@ class MainWindow(QMainWindow):
             GameScreen.PLANAR_INTRO: PlanarIntroScreen(self),
             GameScreen.PLANAR_PLAYING: PlanarScreen(self),
             GameScreen.PLANAR_RESULTS: PlanarResultsScreen(self),
+            GameScreen.MULTIPLAYER: MultiplayerScreen(self),
+            GameScreen.LOBBY: LobbyScreen(self),
+            GameScreen.RACE: RaceScreen(self),
+            GameScreen.RACE_RESULTS: RaceResultsScreen(self),
         }
         for screen in self.screens.values():
             self.stacked_widget.addWidget(screen)
@@ -88,3 +98,9 @@ class MainWindow(QMainWindow):
             self.screens[GameScreen.PLAYING].update_timer_display()
         elif self.game_state.current_screen == GameScreen.PLANAR_PLAYING:
             self.screens[GameScreen.PLANAR_PLAYING].tick()
+        elif self.game_state.current_screen == GameScreen.RACE:
+            self.screens[GameScreen.RACE].tick()
+
+    def closeEvent(self, event):
+        self.multiplayer.leave()
+        super().closeEvent(event)

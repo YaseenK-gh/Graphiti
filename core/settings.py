@@ -11,6 +11,7 @@ DEFAULT_VOLUME = 60
 class Settings:
     volume: int = DEFAULT_VOLUME
     muted: bool = False
+    player_name: str = ""
     path: str = ""
 
     @classmethod
@@ -21,7 +22,10 @@ class Settings:
             data = {}
         volume = data.get("volume", DEFAULT_VOLUME)
         volume = max(0, min(100, int(volume))) if isinstance(volume, (int, float)) else DEFAULT_VOLUME
-        return cls(volume=volume, muted=bool(data.get("muted", False)), path=path)
+        name = data.get("player_name", "")
+        name = name[:constants.PLAYER_NAME_MAX_LEN] if isinstance(name, str) else ""
+        return cls(volume=volume, muted=bool(data.get("muted", False)), player_name=name,
+                   path=path)
 
     def save(self) -> bool:
         data = asdict(self)

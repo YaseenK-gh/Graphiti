@@ -77,8 +77,8 @@ class TestMenuAndOverlays(UITestCase):
     def test_menu_layout(self):
         menu = self.screen(GameScreen.MENU)
         texts = [b.text() for b in menu.findChildren(PixelButton)]
-        self.assertEqual(texts, ["PLAY", "ACCESSORIES", "LEADERBOARD", "QUIT"])
-        self.assertEqual([b.icon_name for b in menu.findChildren(PixelButton)], ["play", "gem", "star", "close"])
+        self.assertEqual(texts, ["PLAY", "MULTIPLAYER", "ACCESSORIES", "LEADERBOARD", "QUIT"])
+        self.assertEqual([b.icon_name for b in menu.findChildren(PixelButton)], ["play", "net", "gem", "star", "close"])
         icons = {b.icon_name for b in menu.findChildren(PixelIconButton)}
         self.assertEqual(icons, {"guide", "trophy", "sound"})
         guide, achievements, volume = menu.guide_btn, menu.achievements_btn, menu.volume_btn

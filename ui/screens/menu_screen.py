@@ -29,6 +29,8 @@ class MenuScreen(BaseScreen):
         layout = panel_layout(panel)
         self.play_btn = make_button("PLAY", self.on_play_clicked, icon="play")
         layout.addWidget(self.play_btn)
+        self.multiplayer_btn = make_button("MULTIPLAYER", self.on_multiplayer_clicked, icon="net")
+        layout.addWidget(self.multiplayer_btn)
         self.accessories_btn = make_button("ACCESSORIES", self.show_accessories, icon="gem")
         layout.addWidget(self.accessories_btn)
         layout.addWidget(make_button("LEADERBOARD", self.show_leaderboard, icon="star"))
@@ -70,6 +72,9 @@ class MenuScreen(BaseScreen):
 
     def on_play_clicked(self):
         self.main_window.show_screen(GameScreen.MODE_SELECT)
+
+    def on_multiplayer_clicked(self):
+        self.main_window.show_screen(GameScreen.MULTIPLAYER)
 
     def show_guide(self):
         HowToPlayDialog(self).exec()

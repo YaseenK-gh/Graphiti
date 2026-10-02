@@ -141,7 +141,7 @@ class TestAccessoriesShop(UITestCase):
 
     def test_menu_opens_the_shop_below_play(self):
         texts = [b.text() for b in self.menu.findChildren(PixelButton)]
-        self.assertEqual(texts.index("ACCESSORIES"), texts.index("PLAY") + 1)
+        self.assertEqual(texts.index("ACCESSORIES"), texts.index("MULTIPLAYER") + 1)
         self.assertLess(texts.index("ACCESSORIES"), texts.index("LEADERBOARD"))
 
     def test_cannot_buy_without_enough_points(self):
