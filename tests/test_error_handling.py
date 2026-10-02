@@ -1,6 +1,4 @@
-"""Phase 2: safe generation API, input validation and timeout recovery."""
-
-from tests import support  # noqa: F401  (must be first)
+from tests import support
 
 import unittest
 from unittest import mock
@@ -10,7 +8,6 @@ from core.validation import validate_n
 
 
 class TestValidateN(unittest.TestCase):
-
     def test_messages(self):
         cases = {
             "": "Please enter a number.",
@@ -20,8 +17,8 @@ class TestValidateN(unittest.TestCase):
             "0": "Number must be positive.",
             "-4": "Number must be positive.",
             "99999999999": "That number is far too large.",
-            "61": "For PATH, n must be 2–60.",
-            "1": "For PATH, n must be 2–60.",
+            "61": "For PATH, n must be 2-60.",
+            "1": "For PATH, n must be 2-60.",
         }
         for text, message in cases.items():
             with self.subTest(text=text):
@@ -37,7 +34,6 @@ class TestValidateN(unittest.TestCase):
 
 
 class TestGenerateGraphSafe(unittest.TestCase):
-
     def test_success(self):
         graph, error = GraphManager.generate_graph_safe('PLANAR', 20)
         self.assertIsNone(error)
@@ -68,7 +64,6 @@ class TestGenerateGraphSafe(unittest.TestCase):
         self.assertIn("kaboom", error)
 
     def test_chromatic_timeout_still_produces_graph(self):
-        """A solver timeout degrades to the 4-color fallback instead of failing generation."""
         with mock.patch('algorithms.solvers.CHROMATIC_TIMEOUT_MS', 0):
             import algorithms.solvers as solvers
             with mock.patch.object(solvers.compute_chromatic_number, '__defaults__', (0,)):

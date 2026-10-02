@@ -1,6 +1,4 @@
-"""Phase 5: badges, streaks, leaderboard persistence, and the end-of-difficulty UI."""
-
-from tests import support  # noqa: F401  (must be first)
+from tests import support
 
 import json
 import os
@@ -8,7 +6,7 @@ import tempfile
 import unittest
 
 from core.achievements import BADGE_INFO, AchievementSystem
-from core.constants import COLORBLIND_SOLVES
+from core.constants import COLORBLIND_SOLVES, DIFFICULTY_CONFIG
 from core.game_state import GameScreen
 from core.leaderboard import LeaderboardSystem
 from core.validation import validate_player_name
@@ -20,13 +18,11 @@ def temp_path(name):
 
 
 class TestAchievements(unittest.TestCase):
-
     def test_perfect_speedrun_and_hint_master(self):
         a = AchievementSystem.load(temp_path("a.json"))
         new = a.on_difficulty_completed('EASY', resets=0, all_max_time=True, hints_used=0)
         self.assertEqual(set(new), {"perfect_easy", "speedrun_easy", "hint_master"})
         self.assertEqual(a.easy_streak, 1)
-        # Earning again doesn't re-announce.
         self.assertEqual(a.on_difficulty_completed('EASY', 0, True, 0), [])
         self.assertEqual(a.easy_streak, 2)
 
@@ -47,7 +43,7 @@ class TestAchievements(unittest.TestCase):
         a.on_difficulty_completed('HARD', 0, False, 0)
         a.on_difficulty_completed('HARD', 0, False, 0, forfeits=1)
         self.assertEqual(a.hard_streak, 0)
-        self.assertEqual(a.easy_streak, 0)  # Streaks are per difficulty.
+        self.assertEqual(a.easy_streak, 0)
 
     def test_colorblind_after_50_solves(self):
         a = AchievementSystem.load(temp_path("a.json"))
@@ -79,13 +75,12 @@ class TestAchievements(unittest.TestCase):
 
 
 class TestLeaderboard(unittest.TestCase):
-
     def test_sorting_ranks_and_persistence(self):
         path = temp_path("lb.json")
         lb = LeaderboardSystem(path)
         self.assertEqual(lb.add_entry("ANN", "EASY", 5000, 12), 1)
         self.assertEqual(lb.add_entry("BOB", "EASY", 9000, 12), 1)
-        self.assertEqual(lb.add_entry("CY", "EASY", 5000, 11), 3)  # Tie: earlier entry ranks higher.
+        self.assertEqual(lb.add_entry("CY", "EASY", 5000, 11), 3)
         self.assertEqual(lb.add_entry("DEE", "HARD", 100, 9), 1)
         top = lb.get_top_by_difficulty("EASY")
         self.assertEqual([e.player_name for e in top], ["BOB", "ANN", "CY"])
@@ -101,7 +96,7 @@ class TestLeaderboard(unittest.TestCase):
             lb.add_entry(f"P{i}", "MEDIUM", i * 100, 12)
         lb.add_entry("H", "HARD", 1, 9)
         self.assertEqual(len(lb.get_top_by_difficulty("MEDIUM", 100)), 5)
-        self.assertIsNone(lb.add_entry("LOW", "MEDIUM", 0, 12))  # Doesn't place.
+        self.assertIsNone(lb.add_entry("LOW", "MEDIUM", 0, 12))
         self.assertEqual(len(lb.get_top_by_difficulty("HARD")), 1)
 
     def test_malformed_rows_skipped(self):
@@ -123,7 +118,6 @@ class TestLeaderboard(unittest.TestCase):
 
 
 class TestEndOfDifficultyUI(UITestCase):
-
     def test_complete_easy_earns_badges_and_submits(self):
         self.play_difficulty('EASY')
         result = self.state.last_difficulty_result
@@ -141,15 +135,13 @@ class TestEndOfDifficultyUI(UITestCase):
 
         post.name_input.setText("tester")
         post.on_submit_clicked()
-        self.assertEqual(post.name_error_label.text(), "SAVED — RANK #1")
+        self.assertEqual(post.name_error_label.text(), "SAVED - RANK #1")
         self.assertFalse(post.submit_btn.isEnabled())
         entry = self.state.leaderboard_system.get_top_by_difficulty('EASY')[0]
         self.assertEqual((entry.player_name, entry.score, entry.graph_count),
-                         ("TESTER", result.banked_score, 12))
-        # Second submission is refused.
+                         ("TESTER", result.banked_score, DIFFICULTY_CONFIG['EASY']['num_graphs']))
         self.assertEqual(self.state.submit_score("again"), (None, "Score already submitted."))
 
-        # Leaderboard and achievements dialogs render the data.
         from ui.dialogs import AchievementsDialog, LeaderboardDialog
         dialog = LeaderboardDialog(self.state.leaderboard_system, self.window, difficulty='EASY')
         self.assertEqual(dialog.tables['EASY'].item(0, 1).text(), "TESTER")

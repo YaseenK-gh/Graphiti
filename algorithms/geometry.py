@@ -1,10 +1,3 @@
-"""Small computational-geometry helpers (pure Python, no NumPy/SciPy).
-
-The planar graph families are built from a Delaunay triangulation of random
-points. A Delaunay triangulation is a planar straight-line graph, so the point
-coordinates double as a crossing-free drawing of the graph.
-"""
-
 import math
 import random
 from typing import Dict, List, Sequence, Set, Tuple
@@ -15,7 +8,6 @@ Triangle = Tuple[int, int, int]
 
 def random_points(n: int, rng=random, min_dist: float = None,
                   max_attempts: int = 40) -> List[Point]:
-    """Well-spread random points in the unit square (Poisson-disc style rejection)."""
     if min_dist is None:
         min_dist = 0.6 / math.sqrt(max(n, 1))
     points: List[Point] = []
@@ -27,18 +19,17 @@ def random_points(n: int, rng=random, min_dist: float = None,
                 points.append(p)
                 break
         else:
-            min_dist *= 0.9  # Too crowded: relax the spacing and keep going.
+            min_dist *= 0.9
     return points
 
 
 def _circumcircle(a: Point, b: Point, c: Point) -> Tuple[float, float, float]:
-    """Return (center_x, center_y, radius²) of the circle through a, b, c."""
     ax, ay = a
     bx, by = b
     cx, cy = c
     d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
     if abs(d) < 1e-14:
-        return 0.0, 0.0, math.inf  # Degenerate (collinear): contains everything.
+        return 0.0, 0.0, math.inf
     a2 = ax * ax + ay * ay
     b2 = bx * bx + by * by
     c2 = cx * cx + cy * cy
@@ -48,7 +39,6 @@ def _circumcircle(a: Point, b: Point, c: Point) -> Tuple[float, float, float]:
 
 
 def delaunay_triangles(points: Sequence[Point]) -> List[Triangle]:
-    """Bowyer–Watson Delaunay triangulation. O(n²), fine for n ≤ ~100."""
     n = len(points)
     if n < 3:
         return []
@@ -58,7 +48,6 @@ def delaunay_triangles(points: Sequence[Point]) -> List[Triangle]:
     span = max(max(xs) - min(xs), max(ys) - min(ys), 1e-9)
     mx = (max(xs) + min(xs)) / 2
     my = (max(ys) + min(ys)) / 2
-    # Super-triangle comfortably enclosing every point.
     pts = list(points) + [
         (mx - 20 * span, my - 10 * span),
         (mx + 20 * span, my - 10 * span),
@@ -82,7 +71,6 @@ def delaunay_triangles(points: Sequence[Point]) -> List[Triangle]:
             if (px - cx) ** 2 + (py - cy) ** 2 < r2:
                 bad.append(t)
 
-        # The cavity boundary is every edge used by exactly one bad triangle.
         edge_uses: Dict[Tuple[int, int], int] = {}
         for a, b, c in bad:
             for u, v in ((a, b), (b, c), (c, a)):
@@ -99,7 +87,6 @@ def delaunay_triangles(points: Sequence[Point]) -> List[Triangle]:
 
 
 def delaunay_edges(points: Sequence[Point]) -> Set[Tuple[int, int]]:
-    """Edge set (u < v) of the Delaunay triangulation of `points`."""
     n = len(points)
     if n == 2:
         return {(0, 1)}
@@ -115,19 +102,17 @@ def _orient(a: Point, b: Point, c: Point) -> float:
 
 
 def segments_cross(p1: Point, p2: Point, q1: Point, q2: Point) -> bool:
-    """True if the open segments p1p2 and q1q2 properly intersect."""
     d1 = _orient(q1, q2, p1)
     d2 = _orient(q1, q2, p2)
     d3 = _orient(p1, p2, q1)
     d4 = _orient(p1, p2, q2)
     eps = 1e-12
     if min(abs(d1), abs(d2), abs(d3), abs(d4)) < eps:
-        return False  # Touching / collinear: not a proper crossing.
+        return False
     return (d1 > 0) != (d2 > 0) and (d3 > 0) != (d4 > 0)
 
 
 def count_crossings(edges: Sequence[Tuple[int, int]], positions: Dict[int, Point]) -> int:
-    """Number of properly crossing edge pairs in a straight-line drawing."""
     crossings = 0
     edges = list(edges)
     for i in range(len(edges)):

@@ -1,6 +1,4 @@
-"""Solver correctness on classic graphs, plus timeout behaviour."""
-
-from tests import support  # noqa: F401  (must be first)
+from tests import support
 
 import time
 import unittest
@@ -21,7 +19,6 @@ PETERSEN = [(0, 1), (1, 2), (2, 3), (3, 4), (4, 0),
 
 
 class TestSolvers(unittest.TestCase):
-
     def chi(self, n, edges):
         k, coloring, exact = solve_chromatic(build_adjacency_list(n, edges), n, timeout_ms=None)
         self.assertTrue(exact)
@@ -58,7 +55,6 @@ class TestSolvers(unittest.TestCase):
         self.assertIsNone(extend_coloring(adj, 4, 3, precolored={0: 1, 1: 1}, palette_size=10))
 
     def test_timeout_falls_back_quickly(self):
-        """With a zero budget the solver must return promptly with a valid upper bound."""
         n = 40
         edges = complete(8) + [(i, i + 1) for i in range(7, n - 1)]
         adj = build_adjacency_list(n, edges)
@@ -69,8 +65,6 @@ class TestSolvers(unittest.TestCase):
         self.assertFalse(detect_conflicts(dict(enumerate(coloring)), edges))
 
     def test_backtrack_fallback_is_capped_at_four(self):
-        # Mycielski-style hard instance is not needed: a zero timeout forces the fallback path
-        # whenever the greedy bound isn't provably tight.
         edges = PETERSEN
         k = backtrack_chromatic_number(build_adjacency_list(10, edges), 10, timeout_ms=10_000)
         self.assertEqual(k, 3)

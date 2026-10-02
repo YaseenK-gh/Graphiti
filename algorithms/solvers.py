@@ -1,13 +1,3 @@
-"""Chromatic-number solvers.
-
-Exact coloring is NP-hard, so every expensive search runs against a
-cooperative deadline: the search checks the clock periodically and raises
-SolverTimeout, which callers turn into a safe fallback (4 colors for the planar
-families, by the Four Color Theorem). A cooperative deadline is used instead of
-a watchdog thread because Python threads cannot be killed — a timed-out worker
-thread would keep burning CPU in the background.
-"""
-
 import logging
 import time
 from collections import deque
@@ -21,7 +11,7 @@ AdjList = List[List[int]]
 
 
 class SolverTimeout(TimeoutError):
-    """Raised when a search runs past its deadline."""
+    pass
 
 
 def make_deadline(timeout_ms: Optional[float]) -> Optional[float]:
@@ -29,7 +19,6 @@ def make_deadline(timeout_ms: Optional[float]) -> Optional[float]:
 
 
 def build_adjacency_list(n: int, edges: Sequence[Tuple[int, int]]) -> AdjList:
-    """Build adjacency list from edges."""
     adj: AdjList = [[] for _ in range(n)]
     for u, v in edges:
         adj[u].append(v)
@@ -38,7 +27,6 @@ def build_adjacency_list(n: int, edges: Sequence[Tuple[int, int]]) -> AdjList:
 
 
 def is_bipartite(adj_list: AdjList, n: int) -> bool:
-    """Check if graph is bipartite via BFS 2-coloring."""
     color = [-1] * n
     for start in range(n):
         if color[start] != -1:
@@ -66,7 +54,6 @@ def has_triangle(adj_list: AdjList, n: int) -> bool:
 
 
 def find_max_clique_size(adj_list: AdjList, n: int, timeout_ms: Optional[float] = None) -> int:
-    """Exact maximum clique size (Bron–Kerbosch with pivoting)."""
     if n == 0:
         return 0
     nbrs = [set(a) for a in adj_list]
@@ -94,7 +81,6 @@ def find_max_clique_size(adj_list: AdjList, n: int, timeout_ms: Optional[float] 
 
 
 def maximum_cardinality_search(adj_list: AdjList, n: int) -> List[int]:
-    """MCS visiting order. For a chordal graph its reverse is a perfect elimination ordering."""
     weight = [0] * n
     numbered = [False] * n
     order = []
@@ -109,7 +95,6 @@ def maximum_cardinality_search(adj_list: AdjList, n: int) -> List[int]:
 
 
 def is_chordal(adj_list: AdjList, n: int) -> bool:
-    """Tarjan–Yannakakis chordality test on the MCS ordering."""
     order = maximum_cardinality_search(adj_list, n)
     pos = {v: i for i, v in enumerate(order)}
     nbrs = [set(a) for a in adj_list]
@@ -124,7 +109,6 @@ def is_chordal(adj_list: AdjList, n: int) -> bool:
 
 
 def chordal_clique_number(adj_list: AdjList, n: int) -> int:
-    """ω (= χ) of a chordal graph in O(n²): each vertex's earlier MCS neighbours form a clique."""
     if n == 0:
         return 0
     order = maximum_cardinality_search(adj_list, n)
@@ -133,7 +117,6 @@ def chordal_clique_number(adj_list: AdjList, n: int) -> int:
 
 
 def dsatur_coloring(adj_list: AdjList, n: int) -> List[int]:
-    """DSatur greedy coloring — a fast, usually tight, upper bound."""
     color = [-1] * n
     saturation = [set() for _ in range(n)]
     degree = [len(a) for a in adj_list]
@@ -153,13 +136,6 @@ def extend_coloring(adj_list: AdjList, n: int, max_colors: int,
                     precolored: Optional[Dict[int, Optional[int]]] = None,
                     palette_size: Optional[int] = None,
                     deadline: Optional[float] = None) -> Optional[List[int]]:
-    """Complete a (possibly empty) partial coloring using at most `max_colors` distinct colors.
-
-    Colors are drawn from range(palette_size). Returns the full coloring, or None
-    if no completion exists. DSatur branching with symmetry breaking: only one
-    not-yet-used color is ever tried, since all unused colors are equivalent.
-    Raises SolverTimeout once `deadline` (a perf_counter value) passes.
-    """
     palette_size = max_colors if palette_size is None else palette_size
     color = [-1] * n
     use = [0] * palette_size
@@ -188,7 +164,7 @@ def extend_coloring(adj_list: AdjList, n: int, max_colors: int,
         if c is None:
             continue
         if not 0 <= c < palette_size or c in nb_colors[v]:
-            return None  # Out-of-palette or conflicting precoloring.
+            return None
         assign(v, c)
     if sum(1 for k in use if k) > max_colors:
         return None
@@ -228,13 +204,11 @@ def extend_coloring(adj_list: AdjList, n: int, max_colors: int,
 
 
 def can_color_with_k(adj_list: AdjList, n: int, k: int, deadline: Optional[float] = None) -> bool:
-    """Check if graph can be colored with k colors."""
     return extend_coloring(adj_list, n, k, deadline=deadline) is not None
 
 
 def solve_chromatic(adj_list: AdjList, n: int,
                     timeout_ms: Optional[float] = CHROMATIC_TIMEOUT_MS) -> Tuple[int, List[int], bool]:
-    """Return (k, coloring with k colors, exact?). Falls back to the DSatur bound on timeout."""
     if n == 0:
         return 0, [], True
     if not any(adj_list):
@@ -258,7 +232,6 @@ def solve_chromatic(adj_list: AdjList, n: int,
 def backtrack_chromatic_number(adj_list: AdjList, n: int,
                                timeout_ms: float = CHROMATIC_TIMEOUT_MS,
                                fallback: int = CHROMATIC_FALLBACK) -> int:
-    """Chromatic number with timeout (fallback to min(k=4, greedy bound) on timeout)."""
     k, _, exact = solve_chromatic(adj_list, n, timeout_ms)
     if not exact:
         k = min(fallback, k)
@@ -268,7 +241,6 @@ def backtrack_chromatic_number(adj_list: AdjList, n: int,
 
 def compute_chromatic_number(graph_type: str, n: int, edges: Sequence[Tuple[int, int]],
                              timeout_ms: float = CHROMATIC_TIMEOUT_MS) -> int:
-    """Chromatic number, using closed forms where the graph family allows it."""
     if n == 0:
         return 0
     if not edges:
@@ -279,13 +251,11 @@ def compute_chromatic_number(graph_type: str, n: int, edges: Sequence[Tuple[int,
     if graph_type == 'CYCLE':
         return 2 if n % 2 == 0 else 3
     if graph_type == 'WHEEL':
-        # An odd rim needs 3 colors on its own, plus one for the hub.
         rim_size = n - 1
         return 3 if rim_size % 2 == 0 else 4
 
     adj_list = build_adjacency_list(n, edges)
     if graph_type in ('OUTERPLANAR', 'TRIANGLE_FREE'):
-        # Outerplanar ⇒ χ ≤ 3; planar triangle-free ⇒ χ ≤ 3 (Grötzsch).
         return 2 if is_bipartite(adj_list, n) else 3
     if graph_type == 'CHORDAL':
         return chordal_clique_number(adj_list, n)
@@ -295,7 +265,6 @@ def compute_chromatic_number(graph_type: str, n: int, edges: Sequence[Tuple[int,
 def optimal_coloring(n: int, edges: Sequence[Tuple[int, int]],
                      chromatic_number: Optional[int] = None,
                      timeout_ms: float = CHROMATIC_TIMEOUT_MS) -> Dict[int, int]:
-    """A proper coloring using χ colors when found in time, else the best known coloring."""
     adj_list = build_adjacency_list(n, edges)
     if chromatic_number:
         try:

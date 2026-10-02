@@ -1,16 +1,8 @@
-"""Layout engine: vertex positions in a CANVAS_WIDTH × CANVAS_HEIGHT scene.
-
-Every layout returns ``{vertex_id: (x, y)}`` with all points inside the padded
-canvas. PATH and TREE are deliberately tangled to make them harder to read; the
-other families show their structure without crossings where possible, with
-force-directed placement as the fallback for CHORDAL (and planar graphs without
-an embedding).
-"""
-
 import logging
 import math
 import random
 import time
+from collections import deque
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from algorithms.geometry import count_crossings
@@ -19,12 +11,14 @@ from core.constants import (CANVAS_HEIGHT, CANVAS_PADDING, CANVAS_WIDTH, LAYOUT_
 
 logger = logging.getLogger(__name__)
 
+TREE_LAYOUT_ATTEMPTS = 120
+PATH_LAYOUT_ATTEMPTS = 20
+
 LayoutDict = Dict[int, Tuple[float, float]]
 Edge = Tuple[int, int]
 
 
 def vertex_radius(n: int) -> float:
-    """Node radius: clamp(300 / n, 8, 14)."""
     return max(NODE_RADIUS_MIN, min(NODE_RADIUS_MAX, NODE_RADIUS_SCALE / max(n, 1)))
 
 
@@ -33,13 +27,14 @@ def compute_layout(graph_type: str, n: int, vertices: Sequence[int], edges: Sequ
                    width: int = CANVAS_WIDTH, height: int = CANVAS_HEIGHT,
                    padding: int = CANVAS_PADDING,
                    timeout_ms: float = LAYOUT_TIMEOUT_MS) -> LayoutDict:
-    """Compute layout based on graph type (or scale a known planar embedding)."""
     if n == 0:
         return {}
     if positions:
         return layout_from_positions(positions, width, height, padding)
-    if graph_type in ('PATH', 'TREE'):
-        return layout_tangled(n, edges, width, height, padding, timeout_ms)
+    if graph_type == 'PATH':
+        return layout_path(n, edges, width, height, padding)
+    if graph_type == 'TREE':
+        return layout_tree(n, vertices, edges, width, height, padding, timeout_ms)
     if graph_type in ('BIPARTITE', 'COMPLETE_BIPARTITE'):
         return layout_two_columns(n, vertices, edges, width, height, padding)
     if graph_type in ('CYCLE', 'OUTERPLANAR'):
@@ -50,7 +45,6 @@ def compute_layout(graph_type: str, n: int, vertices: Sequence[int], edges: Sequ
 
 
 def layout_from_positions(positions: LayoutDict, width: int, height: int, padding: int) -> LayoutDict:
-    """Affinely scale an embedding into the canvas (affine maps keep it crossing-free)."""
     xs = [p[0] for p in positions.values()]
     ys = [p[1] for p in positions.values()]
     fx = _fit_axis(xs, padding, width - padding)
@@ -68,7 +62,6 @@ def _fit_axis(values: Sequence[float], lo: float, hi: float):
 
 
 def layout_circle(n: int, width: int, height: int, padding: int) -> LayoutDict:
-    """Circle layout: vertices on a regular polygon, starting at the top."""
     cx, cy = width / 2, height / 2
     radius = min(width, height) / 2 - padding
     return {i: (cx + radius * math.cos(2 * math.pi * i / n - math.pi / 2),
@@ -76,7 +69,6 @@ def layout_circle(n: int, width: int, height: int, padding: int) -> LayoutDict:
 
 
 def layout_wheel(n: int, width: int, height: int, padding: int) -> LayoutDict:
-    """Wheel layout: hub (vertex 0) at the centre, rim on a circle."""
     cx, cy = width / 2, height / 2
     radius = min(width, height) / 2 - padding
     rim = n - 1
@@ -97,7 +89,6 @@ def _adjacency(n: int, edges: Sequence[Edge]) -> List[List[int]]:
 
 def layout_two_columns(n: int, vertices: Sequence[int], edges: Sequence[Edge],
                        width: int, height: int, padding: int, sweeps: int = 4) -> LayoutDict:
-    """Two-column layout: set A = [0, n//2) left, set B right, barycenter-ordered to cut crossings."""
     a = n // 2
     left, right = list(range(a)), list(range(a, n))
     adj = _adjacency(n, edges)
@@ -129,12 +120,10 @@ def _column(vs: List[int], x: float, height: int, padding: int, max_gap: float =
 
 
 def edge_clearance(n: int) -> float:
-    """How far an edge must stay from every vertex it doesn't connect to."""
     return vertex_radius(n) + 5.0
 
 
 def _segment_dist2(px: float, py: float, ax: float, ay: float, bx: float, by: float) -> float:
-    """Squared distance from point p to segment ab."""
     dx, dy = bx - ax, by - ay
     length2 = dx * dx + dy * dy
     t = 0.0 if length2 == 0 else max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length2))
@@ -143,7 +132,6 @@ def _segment_dist2(px: float, py: float, ax: float, ay: float, bx: float, by: fl
 
 
 def edges_grazing_vertices(edges: Sequence[Edge], layout: LayoutDict, clearance: float) -> int:
-    """Count (edge, vertex) pairs where an edge runs within `clearance` of a vertex it doesn't touch."""
     c2 = clearance * clearance
     count = 0
     for u, v in edges:
@@ -154,98 +142,179 @@ def edges_grazing_vertices(edges: Sequence[Edge], layout: LayoutDict, clearance:
     return count
 
 
-def layout_tangled(n: int, edges: Sequence[Edge], width: int, height: int, padding: int,
-                   timeout_ms: float = LAYOUT_TIMEOUT_MS, rng=random,
-                   spare_cells: float = 1.35, max_attempts: int = 8) -> LayoutDict:
-    """Scatter vertices over a jittered grid in random order so edges cross everywhere,
-    then shuffle positions until no edge runs through a vertex it doesn't connect to."""
+def _rooted(n: int, adj: List[List[int]], root: int):
+    depth = [-1] * n
+    depth[root] = 0
+    children: List[List[int]] = [[] for _ in range(n)]
+    order = [root]
+    for v in order:
+        for u in adj[v]:
+            if depth[u] == -1:
+                depth[u] = depth[v] + 1
+                children[v].append(u)
+                order.append(u)
+    return depth, children, order
+
+
+def _is_clean(n: int, edges: Sequence[Edge], layout: LayoutDict) -> bool:
+    min_sep = 2.6 * vertex_radius(n)
+    points = [layout[v] for v in range(n)]
+    for i in range(n):
+        for j in range(i + 1, n):
+            if math.dist(points[i], points[j]) < min_sep:
+                return False
+    return (count_crossings(edges, layout) == 0
+            and edges_grazing_vertices(edges, layout, edge_clearance(n)) == 0)
+
+
+def _chain_order(n: int, edges: Sequence[Edge]) -> List[int]:
+    adj = _adjacency(n, edges)
+    start = next((v for v in range(n) if len(adj[v]) <= 1), 0)
+    order, previous = [start], None
+    while len(order) < n:
+        following = [u for u in adj[order[-1]] if u != previous]
+        if not following:
+            break
+        previous = order[-1]
+        order.append(following[0])
+    return order
+
+
+def _winding_grid_path(cols: int, rows: int, rng, steps: int) -> List[Tuple[int, int]]:
+    path = [(c if r % 2 == 0 else cols - 1 - c, r) for r in range(rows) for c in range(cols)]
+    for _ in range(steps):
+        if rng.random() < 0.5:
+            path.reverse()
+        (c, r), before = path[-1], path[-2] if len(path) > 1 else None
+        options = [(c + dc, r + dr) for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                   if 0 <= c + dc < cols and 0 <= r + dr < rows and (c + dc, r + dr) != before]
+        if not options:
+            continue
+        cut = path.index(rng.choice(options))
+        path[cut + 1:] = reversed(path[cut + 1:])
+    return path
+
+
+def layout_path(n: int, edges: Sequence[Edge], width: int, height: int, padding: int,
+                rng=random) -> LayoutDict:
     if n == 1:
         return {0: (width / 2, height / 2)}
-    start_time = time.perf_counter()
-    budget_s = min(timeout_ms, 600.0) / 1000
-
-    # Small graphs use a smaller central region so they don't look lost on the canvas.
+    chain = _chain_order(n, edges)
     scale = max(0.5, min(1.0, math.sqrt(n / 20)))
     w, h = (width - 2 * padding) * scale, (height - 2 * padding) * scale
     x0, y0 = (width - w) / 2, (height - h) / 2
-    cells = max(n + 2, math.ceil(n * spare_cells))
-    cols = max(2, math.ceil(math.sqrt(cells * w / h)))
-    rows = max(2, math.ceil(cells / cols))
-    cw, ch = w / cols, h / rows
-    slots = [(x0 + (c + 0.5 + rng.uniform(-0.3, 0.3)) * cw, y0 + (r + 0.5 + rng.uniform(-0.3, 0.3)) * ch)
-             for r in range(rows) for c in range(cols)]
+    cols = max(2, math.ceil(math.sqrt(n * w / h)))
+    rows = max(1, math.ceil(n / cols))
 
-    incident: List[List[int]] = [[] for _ in range(n)]
-    for i, (u, v) in enumerate(edges):
-        incident[u].append(i)
-        incident[v].append(i)
-    c2 = edge_clearance(n) ** 2
-
-    def near(e: int, w_: int, where: List[int]) -> bool:
-        u, v = edges[e]
-        if w_ == u or w_ == v:
-            return False
-        (ax, ay), (bx, by), (px, py) = slots[where[u]], slots[where[v]], slots[where[w_]]
-        return _segment_dist2(px, py, ax, ay, bx, by) < c2
-
-    def pairs_touching(vs, where: List[int]) -> set:
-        found = set()
-        for x in vs:
-            for e in range(len(edges)):  # x sitting on someone else's edge
-                if near(e, x, where):
-                    found.add((e, x))
-            for e in incident[x]:  # x's edges running over someone else
-                for w_ in range(n):
-                    if near(e, w_, where):
-                        found.add((e, w_))
-        return found
-
-    def attempt(deadline: float):
-        where = rng.sample(range(len(slots)), n)  # vertex -> slot index
-        occupant: List[Optional[int]] = [None] * len(slots)
-        for v, s in enumerate(where):
-            occupant[s] = v
-        bad = pairs_touching(range(n), where)
-        while bad and time.perf_counter() < deadline:
-            # Move a vertex of a bad pair to a random slot (swapping with whoever is there).
-            e, w_ = rng.choice(tuple(bad))
-            a = rng.choice((w_, *edges[e]))
-            target = rng.randrange(len(slots))
-            b = occupant[target]
-            if b == a:
-                continue
-            movers = (a,) if b is None else (a, b)
-            before = pairs_touching(movers, where)
-            sa = where[a]
-            where[a], occupant[target], occupant[sa] = target, a, b
-            if b is not None:
-                where[b] = sa
-            after = pairs_touching(movers, where)
-            if len(after) < len(before) or (len(after) == len(before) and rng.random() < 0.3):
-                bad = (bad - before) | after
-            else:  # Undo.
-                where[a], occupant[sa], occupant[target] = sa, a, b
-                if b is not None:
-                    where[b] = target
-        layout = {v: slots[where[v]] for v in range(n)}
-        return len(bad), -count_crossings(edges, layout), layout
-
-    # Keep the most tangled of a few clean attempts (small graphs vary a lot).
-    deadline = start_time + budget_s
-    best = attempt(deadline)
-    for _ in range(max_attempts - 1):
-        if time.perf_counter() - start_time > budget_s / 3:
+    layout: LayoutDict = {}
+    for attempt in range(PATH_LAYOUT_ATTEMPTS):
+        jitter = 0.2 if attempt < PATH_LAYOUT_ATTEMPTS - 1 else 0.0
+        cells = _winding_grid_path(cols, rows, rng, 20 * cols * rows)[:n]
+        xs = [c + rng.uniform(-jitter, jitter) for c, _ in cells]
+        ys = [r + rng.uniform(-jitter, jitter) for _, r in cells]
+        fx = _fit_axis(xs, x0, x0 + w)
+        fy = _fit_axis(ys, y0, y0 + h)
+        layout = {v: (fx(x), fy(y)) for v, x, y in zip(chain, xs, ys)}
+        if _is_clean(n, edges, layout):
             break
-        best = min(best, attempt(deadline), key=lambda r: r[:2])
-    if best[0]:
-        logger.warning("Tangled layout left %d edge/vertex near-misses (n=%d)", best[0], n)
-    return best[2]
+    return layout
+
+
+def layout_radial_tree(n: int, edges: Sequence[Edge], width: int, height: int, padding: int,
+                       root: int, jitter: float, rng=random) -> LayoutDict:
+    adj = _adjacency(n, edges)
+    depth, children, order = _rooted(n, adj, root)
+    leaves = [0] * n
+    for v in reversed(order):
+        leaves[v] = sum(leaves[c] for c in children[v]) or 1
+    max_depth = max(depth) or 1
+
+    start = rng.uniform(0, 2 * math.pi)
+    span = {root: (start, start + 2 * math.pi)}
+    angle = [0.0] * n
+    radius = [0.0] * n
+    for v in order:
+        lo, hi = span[v]
+        kids = list(children[v])
+        rng.shuffle(kids)
+        cursor = lo
+        for c in kids:
+            share = (hi - lo) * leaves[c] / leaves[v]
+            span[c] = (cursor, cursor + share)
+            angle[c] = cursor + share / 2 + rng.uniform(-jitter, jitter) * share / 2
+            radius[c] = (depth[c] + rng.uniform(-jitter, jitter) / 2) / max_depth
+            cursor += share
+
+    cx, cy = width / 2, height / 2
+    rx, ry = (width - 2 * padding) / 2, (height - 2 * padding) / 2
+    return {v: (cx + rx * min(1.0, radius[v]) * math.cos(angle[v]),
+                cy + ry * min(1.0, radius[v]) * math.sin(angle[v])) for v in range(n)}
+
+
+def layout_tree(n: int, vertices: Sequence[int], edges: Sequence[Edge], width: int, height: int,
+                padding: int, timeout_ms: float = LAYOUT_TIMEOUT_MS, rng=random) -> LayoutDict:
+    if n == 1:
+        return {0: (width / 2, height / 2)}
+    for attempt in range(TREE_LAYOUT_ATTEMPTS):
+        jitter = 0.6 if attempt < TREE_LAYOUT_ATTEMPTS * 2 // 3 else 0.2
+        layout = layout_radial_tree(n, edges, width, height, padding, rng.randrange(n), jitter, rng)
+        if _is_clean(n, edges, layout):
+            return layout
+    return layout_hierarchical_tree(n, vertices, edges, width, height, padding, timeout_ms)
+
+
+def _bfs_farthest(start: int, adj: List[List[int]]):
+    parent = {start: None}
+    queue = deque([start])
+    last = start
+    while queue:
+        last = queue.popleft()
+        for v in adj[last]:
+            if v not in parent:
+                parent[v] = last
+                queue.append(v)
+    return last, parent
+
+
+def layout_hierarchical_tree(n: int, vertices: Sequence[int], edges: Sequence[Edge],
+                             width: int, height: int, padding: int,
+                             timeout_ms: float = LAYOUT_TIMEOUT_MS) -> LayoutDict:
+    adj = _adjacency(n, edges)
+    a, _ = _bfs_farthest(0, adj)
+    b, parent = _bfs_farthest(a, adj)
+    path = [b]
+    while parent[path[-1]] is not None:
+        path.append(parent[path[-1]])
+    root = path[len(path) // 2]
+
+    depth, children, order = _rooted(n, adj, root)
+    if len(order) < n:
+        return layout_force_directed(n, vertices, edges, width, height, padding, timeout_ms)
+
+    slot = [0.0] * n
+    next_slot = 0
+    stack = [root]
+    while stack:
+        v = stack.pop()
+        if not children[v]:
+            slot[v] = next_slot
+            next_slot += 1
+        stack.extend(reversed(children[v]))
+    for v in reversed(order):
+        if children[v]:
+            slot[v] = (slot[children[v][0]] + slot[children[v][-1]]) / 2
+
+    max_depth = max(depth)
+    fx = _fit_axis([0, max(next_slot - 1, 0)], padding, width - padding)
+    level_gap = min(140.0, (height - 2 * padding) / max_depth) if max_depth else 0
+    top = height / 2 - level_gap * max_depth / 2
+    return {v: (fx(slot[v]) if next_slot > 1 else width / 2, top + depth[v] * level_gap)
+            for v in range(n)}
 
 
 def layout_force_directed(n: int, vertices: Sequence[int], edges: Sequence[Edge],
                           width: int, height: int, padding: int,
                           timeout_ms: float = LAYOUT_TIMEOUT_MS, rng=random) -> LayoutDict:
-    """Fruchterman–Reingold with an iteration cap and a wall-clock timeout."""
     start_time = time.perf_counter()
     if n == 1:
         return {0: (width / 2, height / 2)}
@@ -256,7 +325,6 @@ def layout_force_directed(n: int, vertices: Sequence[int], edges: Sequence[Edge]
     k = 0.8 * math.sqrt(w * h / n)
     k2 = k * k
 
-    # Start on a jittered circle: far fewer tangles than uniform random starts.
     r0 = min(w, h) / 3
     xs, ys = [], []
     for i in range(n):
@@ -276,7 +344,7 @@ def layout_force_directed(n: int, vertices: Sequence[int], edges: Sequence[Edge]
 
         dx = [0.0] * n
         dy = [0.0] * n
-        for i in range(n):  # Repulsion k²/d between all pairs.
+        for i in range(n):
             xi, yi = xs[i], ys[i]
             for j in range(i + 1, n):
                 ddx, ddy = xi - xs[j], yi - ys[j]
@@ -289,14 +357,14 @@ def layout_force_directed(n: int, vertices: Sequence[int], edges: Sequence[Edge]
                 dy[i] += ddy * f
                 dx[j] -= ddx * f
                 dy[j] -= ddy * f
-        for u, v in edges:  # Attraction d²/k along edges.
+        for u, v in edges:
             ddx, ddy = xs[u] - xs[v], ys[u] - ys[v]
             f = math.sqrt(ddx * ddx + ddy * ddy) / k
             dx[u] -= ddx * f
             dy[u] -= ddy * f
             dx[v] += ddx * f
             dy[v] += ddy * f
-        for i in range(n):  # Move, capped by temperature; weak gravity keeps it centred.
+        for i in range(n):
             fx = dx[i] + (cx - xs[i]) * 0.02
             fy = dy[i] + (cy - ys[i]) * 0.02
             d = math.sqrt(fx * fx + fy * fy)
@@ -316,7 +384,6 @@ def layout_force_directed(n: int, vertices: Sequence[int], edges: Sequence[Edge]
 
 def _separate(xs: List[float], ys: List[float], min_sep: float,
               width: int, height: int, padding: int, passes: int = 12) -> None:
-    """Push apart any nodes closer than `min_sep` (in place)."""
     n = len(xs)
     min_sep2 = min_sep * min_sep
     for _ in range(passes):

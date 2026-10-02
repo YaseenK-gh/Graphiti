@@ -1,34 +1,69 @@
-"""Screen base class and small layout helpers shared by every screen."""
+import html
+from typing import List, Optional, Tuple
 
-from typing import Optional
-
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QGraphicsDropShadowEffect, QLabel, QWidget
+from PySide6.QtWidgets import QGraphicsDropShadowEffect, QLabel, QVBoxLayout, QWidget
 
 from core.constants import UI_INNER
+from ui.styles import COMPACT_MARGINS, GAP, LINE_SPACING_CSS, PANEL_MARGINS
 from ui.widgets.pixel import Divider, PixelButton, PixelPanel
 
 
 class BaseScreen(QWidget):
-    """Base class for all game screens."""
-
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.main_window = main_window
         self.game_state = main_window.game_state
+        self._fitted: List[Tuple[QWidget, float, int, int]] = []
+
+    def fit(self, widget: QWidget, fraction: float, min_width: int, max_width: int) -> QWidget:
+        self._fitted.append((widget, fraction, min_width, max_width))
+        widget.setFixedWidth(min_width)
+        return widget
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        for widget, fraction, lo, hi in self._fitted:
+            widget.setFixedWidth(max(lo, min(hi, int(self.width() * fraction))))
 
     def on_show(self):
-        """Called when the screen becomes visible. Override in subclasses."""
+        pass
 
     def on_hide(self):
-        """Called when another screen replaces this one. Override in subclasses."""
+        pass
+
+
+class SpacedLabel(QLabel):
+    def __init__(self, text: str = ""):
+        super().__init__()
+        self._plain = ""
+        self.setTextFormat(Qt.TextFormat.RichText)
+        self.setText(text)
+
+    def setText(self, text: str):
+        self._plain = text
+        self._render()
+
+    def _render(self):
+        if not self._plain:
+            super().setText("")
+            return
+        body = html.escape(self._plain, quote=False).replace("\n", "<br>")
+        super().setText(f'<div style="{LINE_SPACING_CSS}">{body}</div>')
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.Type.FontChange:
+            self._render()
+
+    def text(self) -> str:
+        return self._plain
 
 
 def make_label(text: str = "", role: Optional[str] = None, wrap: bool = False,
                align=Qt.AlignmentFlag.AlignCenter) -> QLabel:
-    """Roles: title, subtitle, heading, muted, caption, error, body (terminal font), badge."""
-    label = QLabel(text)
+    label = SpacedLabel(text) if wrap or role in ("body", "error") else QLabel(text)
     if role:
         label.setProperty("role", role)
     label.setAlignment(align)
@@ -43,9 +78,8 @@ def make_label(text: str = "", role: Optional[str] = None, wrap: bool = False,
 
 
 def make_button(text: str, slot=None, width: Optional[int] = None, height: Optional[int] = None,
-                variant: str = "light", small: bool = False) -> PixelButton:
-    """variant: light, dark, danger or tab."""
-    button = PixelButton(text, variant=variant, small=small)
+                variant: str = "light", small: bool = False, icon: Optional[str] = None) -> PixelButton:
+    button = PixelButton(text, variant=variant, small=small, icon=icon)
     if width:
         button.setFixedWidth(width)
     button.setFixedHeight(height or button.sizeHint().height())
@@ -58,10 +92,16 @@ def make_panel(dark: bool = False) -> PixelPanel:
     return PixelPanel("dark" if dark else "light")
 
 
+def panel_layout(panel: QWidget, compact: bool = False, spacing: int = GAP) -> QVBoxLayout:
+    layout = QVBoxLayout(panel)
+    layout.setContentsMargins(*(COMPACT_MARGINS if compact else PANEL_MARGINS))
+    layout.setSpacing(spacing)
+    return layout
+
+
 def make_divider(dark: bool = False) -> Divider:
     return Divider(dark)
 
 
 def set_text_color(label: QLabel, color: Optional[str]):
-    """Override a label's role color (None restores it)."""
     label.setStyleSheet(f"color: {color};" if color else "")

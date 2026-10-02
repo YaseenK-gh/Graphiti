@@ -1,5 +1,3 @@
-"""Local leaderboard (JSON-based storage), capped per difficulty."""
-
 import os
 import time
 from dataclasses import asdict, dataclass
@@ -15,21 +13,18 @@ class LeaderboardEntry:
     difficulty: str
     score: int
     timestamp: float
-    graph_count: int  # How many graphs completed (forfeits excluded)
+    graph_count: int
 
 
 class LeaderboardSystem:
-    """Top scores per difficulty, highest first (earlier entry wins ties)."""
-
     LEADERBOARD_FILE = "leaderboard.json"
-    MAX_ENTRIES = constants.LEADERBOARD_MAX_ENTRIES  # per difficulty
+    MAX_ENTRIES = constants.LEADERBOARD_MAX_ENTRIES
 
     def __init__(self, path: Optional[str] = None):
         self.path = path or os.path.join(constants.DATA_DIR, self.LEADERBOARD_FILE)
         self.entries: List[LeaderboardEntry] = self.load()
 
     def load(self) -> List[LeaderboardEntry]:
-        """Load from JSON, skipping malformed rows."""
         data = load_json(self.path, [])
         entries = []
         if isinstance(data, list):
@@ -61,7 +56,6 @@ class LeaderboardSystem:
 
     def add_entry(self, player_name: str, difficulty: str, score: int,
                   graph_count: int) -> Optional[int]:
-        """Add a new entry. Returns its 1-based rank in that difficulty, or None if it didn't place."""
         entry = LeaderboardEntry(player_name=player_name, difficulty=difficulty, score=int(score),
                                  timestamp=time.time(), graph_count=int(graph_count))
         self.entries.append(entry)
@@ -75,5 +69,4 @@ class LeaderboardSystem:
 
     def get_top_by_difficulty(self, difficulty: str,
                               limit: int = constants.LEADERBOARD_TOP_N) -> List[LeaderboardEntry]:
-        """Get top scores for a difficulty."""
         return [e for e in self.entries if e.difficulty == difficulty][:limit]

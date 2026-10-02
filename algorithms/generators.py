@@ -1,15 +1,3 @@
-"""Graph generators for all 11 graph types.
-
-Every generator returns ``(vertices, edges)`` where ``vertices == list(range(n))``
-and ``edges`` is a list of ``(u, v)`` tuples with ``u < v``, no duplicates and
-no self-loops. Every generated graph is connected.
-
-The planar families (TRIANGLE_FREE, NEAR_TRIANGULATION, PLANAR) are carved out
-of a Delaunay triangulation of random points, so they come with a crossing-free
-straight-line embedding. ``generate_graph_full`` exposes those positions so the
-layout engine can draw these graphs without edge crossings.
-"""
-
 import heapq
 import logging
 import random
@@ -27,7 +15,7 @@ FullResult = Tuple[List[int], List[Edge], Optional[Positions]]
 
 
 class GenerationError(RuntimeError):
-    """A generator produced an invalid graph (retried by generate_graph_by_type)."""
+    pass
 
 
 def _norm(u: int, v: int) -> Edge:
@@ -53,7 +41,6 @@ def is_connected(n: int, edges: Sequence[Edge]) -> bool:
 
 
 def _random_spanning_tree(n: int, edges: Sequence[Edge], rng) -> List[Edge]:
-    """Random spanning tree (randomised Kruskal) using only the given edges."""
     parent = list(range(n))
 
     def find(x: int) -> int:
@@ -73,17 +60,13 @@ def _random_spanning_tree(n: int, edges: Sequence[Edge], rng) -> List[Edge]:
     return tree
 
 
-# ─── Easy families ────────────────────────────────────────────────────────────
-
 def generate_path(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
-    """A single chain through all n vertices, visited in random label order."""
     order = list(range(n))
     rng.shuffle(order)
     return list(range(n)), [tuple(sorted((order[i], order[i + 1]))) for i in range(n - 1)]
 
 
 def generate_tree(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
-    """Uniformly random labelled tree via Prüfer sequence decoding."""
     vertices = list(range(n))
     if n <= 1:
         return vertices, []
@@ -110,14 +93,12 @@ def generate_tree(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
 
 
 def generate_bipartite(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
-    """Connected random bipartite graph: A = [0, n//2), B = [n//2, n), ~40% density (capped)."""
     a = n // 2
     set_a = list(range(a))
     set_b = list(range(a, n))
     rng.shuffle(set_a)
     rng.shuffle(set_b)
 
-    # Random spanning tree that alternates sides guarantees connectivity.
     edges = {_norm(set_a[0], set_b[0])}
     joined_a, joined_b = [set_a[0]], [set_b[0]]
     rest = [(v, True) for v in set_a[1:]] + [(v, False) for v in set_b[1:]]
@@ -139,32 +120,22 @@ def generate_bipartite(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
 
 
 def generate_cycle(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
-    """Ring: 0-1-2-...-n-1-0"""
     return list(range(n)), [_norm(i, (i + 1) % n) for i in range(n)]
 
 
-# ─── Medium families ──────────────────────────────────────────────────────────
-
 def generate_complete_bipartite(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
-    """Complete bipartite K_{a,b} with a = floor(n/2), b = ceil(n/2)."""
     a = n // 2
     return list(range(n)), [(u, v) for u in range(a) for v in range(a, n)]
 
 
 def generate_wheel(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
-    """Hub (node 0) + rim cycle (nodes 1 to n-1)."""
     edges = [(0, i) for i in range(1, n)]
     edges += [(i, i + 1) for i in range(1, n - 1)]
-    edges.append((1, n - 1))  # Close the rim.
+    edges.append((1, n - 1))
     return list(range(n)), edges
 
 
 def generate_outerplanar(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
-    """Randomly triangulated convex polygon with some chords removed.
-
-    Vertices 0..n-1 are in boundary order, so drawing them on a circle is
-    crossing-free. The boundary cycle is always kept (connectivity).
-    """
     edges = {_norm(i, (i + 1) % n) for i in range(n)}
     chords = []
     stack = [list(range(n))]
@@ -174,7 +145,7 @@ def generate_outerplanar(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
         if m <= 3:
             continue
         i = rng.randrange(m)
-        j = (i + rng.randint(2, m - 2)) % m  # Non-adjacent on this sub-polygon.
+        j = (i + rng.randint(2, m - 2)) % m
         if i > j:
             i, j = j, i
         chords.append(_norm(poly[i], poly[j]))
@@ -188,12 +159,6 @@ def generate_outerplanar(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
 
 
 def generate_chordal(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
-    """Chordal graph built in reverse perfect-elimination order.
-
-    Each new vertex attaches to a *clique* of already-placed vertices, so its
-    earlier neighbourhood is a clique and the construction order reversed is a
-    PEO. Clique size ≤ 3 keeps ω (= χ) ≤ 4.
-    """
     order = list(range(n))
     rng.shuffle(order)
     adj = {v: set() for v in range(n)}
@@ -217,19 +182,16 @@ def generate_chordal(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
     return list(range(n)), edges
 
 
-# ─── Hard (planar) families ───────────────────────────────────────────────────
-
 def _delaunay_base(n: int, rng) -> Tuple[List[Edge], Positions]:
     points = random_points(n, rng)
     return sorted(delaunay_edges(points)), {i: points[i] for i in range(n)}
 
 
 def generate_triangle_free_full(n: int, rng=random) -> FullResult:
-    """Maximal triangle-free subgraph of a Delaunay triangulation (planar, χ ≤ 3)."""
     base, positions = _delaunay_base(n, rng)
     adj = [set() for _ in range(n)]
     edges = []
-    for u, v in _random_spanning_tree(n, base, rng):  # A tree has no triangles.
+    for u, v in _random_spanning_tree(n, base, rng):
         adj[u].add(v)
         adj[v].add(u)
         edges.append((u, v))
@@ -237,7 +199,7 @@ def generate_triangle_free_full(n: int, rng=random) -> FullResult:
     rest = [e for e in base if e not in tree]
     rng.shuffle(rest)
     for u, v in rest:
-        if not adj[u] & adj[v]:  # No common neighbour ⇒ adding u-v makes no triangle.
+        if not adj[u] & adj[v]:
             adj[u].add(v)
             adj[v].add(u)
             edges.append((u, v))
@@ -245,13 +207,11 @@ def generate_triangle_free_full(n: int, rng=random) -> FullResult:
 
 
 def generate_near_triangulation_full(n: int, rng=random) -> FullResult:
-    """Delaunay triangulation: planar, every interior face a triangle."""
     edges, positions = _delaunay_base(n, rng)
     return list(range(n)), edges, positions
 
 
 def generate_planar_full(n: int, rng=random) -> FullResult:
-    """Delaunay triangulation with 20–35% of edges removed (never disconnecting)."""
     base, positions = _delaunay_base(n, rng)
     tree = set(_random_spanning_tree(n, base, rng))
     removable = [e for e in base if e not in tree]
@@ -272,8 +232,6 @@ def generate_near_triangulation(n: int, rng=random) -> Tuple[List[int], List[Edg
 def generate_planar(n: int, rng=random) -> Tuple[List[int], List[Edge]]:
     return generate_planar_full(n, rng)[:2]
 
-
-# ─── Dispatch with validation + retry ─────────────────────────────────────────
 
 def _no_positions(fn: Callable) -> Callable[[int, object], FullResult]:
     return lambda n, rng: (*fn(n, rng), None)
@@ -296,7 +254,6 @@ GENERATORS: Dict[str, Callable[[int, object], FullResult]] = {
 
 def validate_graph(n: int, vertices: List[int], edges: Sequence[Edge],
                    positions: Optional[Positions] = None) -> None:
-    """Raise GenerationError unless the graph is simple, connected and (if embedded) crossing-free."""
     if vertices != list(range(n)):
         raise GenerationError("vertex list must be 0..n-1")
     seen = set()
@@ -314,7 +271,6 @@ def validate_graph(n: int, vertices: List[int], edges: Sequence[Edge],
 
 def generate_graph_full(graph_type: str, n: int, max_retries: int = GENERATION_MAX_RETRIES,
                         rng=None) -> FullResult:
-    """Generate and validate a graph, retrying on failure. Returns (vertices, edges, positions|None)."""
     if graph_type not in GENERATORS:
         raise ValueError(f"Unknown graph type: {graph_type}")
     min_n, max_n = GRAPH_CONSTRAINTS[graph_type]
@@ -328,7 +284,7 @@ def generate_graph_full(graph_type: str, n: int, max_retries: int = GENERATION_M
             vertices, edges, positions = GENERATORS[graph_type](n, rng)
             validate_graph(n, vertices, edges, positions)
             return vertices, edges, positions
-        except Exception as e:  # noqa: BLE001 — any failure is retried, then re-raised
+        except Exception as e:
             last_error = e
             logger.warning("Generation attempt %d/%d for %s (n=%d) failed: %s",
                            attempt, max_retries, graph_type, n, e)
@@ -338,6 +294,5 @@ def generate_graph_full(graph_type: str, n: int, max_retries: int = GENERATION_M
 
 def generate_graph_by_type(graph_type: str, n: int, max_retries: int = GENERATION_MAX_RETRIES,
                            rng=None) -> Tuple[List[int], List[Edge]]:
-    """Generate graph with error handling and retry logic. Returns (vertices, edges)."""
     vertices, edges, _ = generate_graph_full(graph_type, n, max_retries, rng)
     return vertices, edges

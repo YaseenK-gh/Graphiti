@@ -1,6 +1,4 @@
-"""Phase 3: headless end-to-end runs through the real screens (EASY/MEDIUM/HARD + FREE)."""
-
-from tests import support  # noqa: F401  (must be first)
+from tests import support
 
 import os
 import tempfile
@@ -17,7 +15,6 @@ from core.game_state import GameMode, GameScreen, GameState
 
 
 def pump(ms=0):
-    """Process Qt events for `ms` milliseconds."""
     app = support.qapp()
     end = time.perf_counter() + ms / 1000
     app.processEvents()
@@ -34,7 +31,6 @@ def wait_for_screen(window, screen, timeout_ms=5000):
 
 
 class UITestCase(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         support.qapp()
@@ -42,7 +38,6 @@ class UITestCase(unittest.TestCase):
         cls.MainWindow = MainWindow
 
     def setUp(self):
-        # Fresh achievement/leaderboard files per test so results don't leak between tests.
         self.data_dir = tempfile.mkdtemp(dir=support.TEST_DATA_DIR)
         state = GameState(
             achievement_system=AchievementSystem.load(os.path.join(self.data_dir, "achievements.json")),
@@ -68,7 +63,6 @@ class UITestCase(unittest.TestCase):
         return self.window.screens[which]
 
     def solve_current_graph(self):
-        """Color the current graph optimally through the canvas API."""
         graph = self.state.current_graph
         canvas = self.screen(GameScreen.PLAYING).canvas
         for v, c in optimal_coloring(graph.n, graph.edges, graph.chromatic_number).items():
@@ -104,13 +98,12 @@ class UITestCase(unittest.TestCase):
 
 
 class TestFullRuns(UITestCase):
-
     def check_run(self, difficulty):
         result = self.play_difficulty(difficulty)
         num = DIFFICULTY_CONFIG[difficulty]['num_graphs']
         self.assertEqual(len(self.state.level_results), num)
         self.assertTrue(all(r.colors_used <= r.chromatic_number for r in self.state.level_results))
-        self.assertTrue(result.all_max_time)  # Solved instantly: every graph under the max time.
+        self.assertTrue(result.all_max_time)
         self.assertEqual(result.banked_score, result.provisional_score * 5)
         self.assertEqual(result.provisional_score, sum(self.state.level_scores))
         post = self.screen(GameScreen.POST_DIFFICULTY)
@@ -134,7 +127,6 @@ class TestFullRuns(UITestCase):
 
 
 class TestPlayingScreen(UITestCase):
-
     def start_easy(self):
         self.window.show_screen(GameScreen.DIFFICULTY_SELECT)
         self.screen(GameScreen.DIFFICULTY_SELECT).start_difficulty('EASY')
@@ -149,7 +141,7 @@ class TestPlayingScreen(UITestCase):
             pre.n_input.setText(bad)
             self.assertFalse(pre.start_btn.isEnabled(), bad)
             self.assertTrue(pre.error_label.text())
-        pre.on_start_clicked()  # Ignored while invalid.
+        pre.on_start_clicked()
         self.assertEqual(self.state.current_screen, GameScreen.PRE_GAME)
 
     def test_conflicts_and_right_click_erase(self):
@@ -160,13 +152,11 @@ class TestPlayingScreen(UITestCase):
         canvas.color_vertex(v, 0)
         self.assertIn(f"{min(u, v)}-{max(u, v)}", canvas.conflicts)
         self.assertIn("CONFLICT", playing.conflict_label.text())
-        # Real right-click on the vertex through the viewport.
         from PySide6.QtTest import QTest
         pos = canvas.mapFromScene(canvas.vertex_items[v].pos())
         QTest.mouseClick(canvas.viewport(), Qt.MouseButton.RightButton, Qt.KeyboardModifier.NoModifier, pos)
         self.assertIsNone(canvas.coloring[v])
         self.assertFalse(canvas.conflicts)
-        # Real left-click colors with the active color.
         playing.on_color_selected(4)
         QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier, pos)
         self.assertEqual(canvas.coloring[v], 4)
@@ -216,7 +206,7 @@ class TestPlayingScreen(UITestCase):
             choice = "resume"
 
             def exec(self):
-                state.timer_start -= 10  # Ten seconds pass while the menu is open.
+                state.timer_start -= 10
                 return 0
 
         playing.make_pause_dialog = lambda: FakePauseDialog()
@@ -254,7 +244,6 @@ class TestPlayingScreen(UITestCase):
 
 
 class TestFreeMode(UITestCase):
-
     def test_every_type_playable_in_free_mode(self):
         select = self.screen(GameScreen.FREE_GRAPH_SELECT)
         for graph_type, (lo, hi) in GRAPH_CONSTRAINTS.items():

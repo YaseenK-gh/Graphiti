@@ -1,15 +1,13 @@
-"""STANDARD vs FREE mode selection."""
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
 
 from core.game_state import GameMode, GameScreen
-from ui.screens import BaseScreen, make_button, make_divider, make_label, make_panel
+from ui.styles import GAP
+from ui.screens import BaseScreen, make_button, make_divider, make_label, make_panel, panel_layout
 from ui.widgets.pixel import PixelCard
 
 
 class ModeSelectScreen(BaseScreen):
-
     def __init__(self, main_window, parent=None):
         super().__init__(main_window, parent)
         self.init_ui()
@@ -17,19 +15,16 @@ class ModeSelectScreen(BaseScreen):
     def init_ui(self):
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        panel = make_panel()
-        panel.setFixedWidth(680)
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(32, 28, 32, 28)
-        layout.setSpacing(16)
+        panel = self.fit(make_panel(), 0.55, 640, 820)
+        layout = panel_layout(panel)
         layout.addWidget(make_label("SELECT GAME MODE", role="subtitle"))
 
         cards = QHBoxLayout()
-        cards.setSpacing(18)
-        self.standard_card = PixelCard("STANDARD", ["3 DIFFICULTY LEVELS", "SCORING · TITLES",
+        cards.setSpacing(GAP)
+        self.standard_card = PixelCard("STANDARD", ["3 DIFFICULTY LEVELS", "SCORING | TITLES",
                                                     "LEADERBOARD"])
         self.standard_card.clicked.connect(self.on_standard_clicked)
-        self.free_card = PixelCard("FREE MODE", ["PRACTICE TRAINING", "ANY GRAPH · ANY SIZE",
+        self.free_card = PixelCard("FREE MODE", ["PRACTICE TRAINING", "ANY GRAPH | ANY SIZE",
                                                  "NO SCORING"])
         self.free_card.clicked.connect(self.on_free_clicked)
         cards.addWidget(self.standard_card)
@@ -37,7 +32,7 @@ class ModeSelectScreen(BaseScreen):
         layout.addLayout(cards)
 
         layout.addWidget(make_divider())
-        layout.addWidget(make_button("◄ BACK TO MENU", self.on_back_clicked, small=True))
+        layout.addWidget(make_button("BACK TO MENU", self.on_back_clicked, small=True, icon="back"))
         outer.addWidget(panel)
 
     def on_show(self):

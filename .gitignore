@@ -1,5 +1,8 @@
 __pycache__/
 *.pyc
 
-# Local saves (leaderboard, achievements) created while playing
+# Local saves (leaderboard, achievements, settings) created while playing
 data/
+
+# Mojangles is Mojang's font and not redistributable; kept out of the repository.
+assets/fonts/mojangles-regular.ttf

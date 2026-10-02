@@ -1,5 +1,3 @@
-"""Interactive graph view: rendering, coloring by mouse, conflict display, zoom/pan, hints."""
-
 import gc
 import math
 from typing import Callable, Dict, List, Optional, Set
@@ -22,10 +20,8 @@ MIN_ZOOM, MAX_ZOOM = 0.5, 3.0
 
 
 class GraphCanvas(QGraphicsView):
-    """Left-click colors a vertex with the active color, right-click erases it."""
-
-    coloring_changed = Signal()   # Any vertex color changed.
-    graph_completed = Signal()    # Every vertex colored and no conflicts.
+    coloring_changed = Signal()
+    graph_completed = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -64,13 +60,8 @@ class GraphCanvas(QGraphicsView):
         self._anim_solution: Dict[int, int] = {}
         self._anim_done: Optional[Callable[[], None]] = None
 
-    # ─── Loading ──────────────────────────────────────────────────────────────
 
     def set_graph(self, graph: Graph, coloring: Optional[Dict[int, Optional[int]]] = None):
-        """Load a graph, with explicit cleanup of the previous one.
-
-        Pass `coloring` to share a dict with the game state; it is reset in place.
-        """
         self.stop_animation()
         self.clear_scene()
         self.graph = graph
@@ -84,7 +75,6 @@ class GraphCanvas(QGraphicsView):
         self.reset_zoom()
 
     def clear_scene(self):
-        """Remove every item from the scene and release references."""
         self.clear_hint()
         for item in list(self.edge_items.values()) + list(self.vertex_items.values()):
             self.graph_scene.removeItem(item)
@@ -94,7 +84,6 @@ class GraphCanvas(QGraphicsView):
         gc.collect()
 
     def draw_graph(self):
-        """Edges first (back layer), then vertices on top."""
         if not self.graph:
             return
         layout = self.graph.layout
@@ -113,7 +102,6 @@ class GraphCanvas(QGraphicsView):
         self.update_conflicts()
 
     def draw_side_labels(self):
-        """'SET A' / 'SET B' above the two columns of a bipartite layout."""
         half = self.graph.n // 2
         for name, side in (("SET A", range(half)), ("SET B", range(half, self.graph.n))):
             points = [self.graph.layout[v] for v in side]
@@ -121,18 +109,16 @@ class GraphCanvas(QGraphicsView):
                 continue
             x = sum(p[0] for p in points) / len(points)
             top = min(p[1] for p in points)
-            text = self.graph_scene.addSimpleText(name, pixel_font(12))
+            text = self.graph_scene.addSimpleText(name, pixel_font(12, crisp=False))
             text.setBrush(QColor(UI_BORDER))
             rect = text.boundingRect()
             text.setPos(x - rect.width() / 2, top - self.vertex_radius - rect.height() - 8)
 
-    # ─── Coloring ─────────────────────────────────────────────────────────────
 
     def set_active_color(self, color_index: int):
         self.active_color = color_index
 
     def color_vertex(self, vertex_id: int, color_index: Optional[int] = None):
-        """Color a vertex (default: the active color). Emits graph_completed when solved."""
         if not self.interactive or self.graph is None or vertex_id not in self.vertex_items:
             return
         color_index = self.active_color if color_index is None else color_index
@@ -154,7 +140,6 @@ class GraphCanvas(QGraphicsView):
         self.coloring_changed.emit()
 
     def clear_coloring(self):
-        """Erase every vertex (level reset)."""
         self.stop_animation()
         self.clear_hint()
         for v in self.vertex_items:
@@ -168,7 +153,6 @@ class GraphCanvas(QGraphicsView):
         self.vertex_items[vertex_id].set_color(color_index)
 
     def update_conflicts(self):
-        """Recompute conflicting edges and paint them red."""
         if self.graph is None:
             return
         self.conflicts = detect_conflicts(self.coloring, self.graph.edges)
@@ -185,10 +169,8 @@ class GraphCanvas(QGraphicsView):
         return (self.graph is not None and not self.conflicts
                 and all(self.coloring.get(v) is not None for v in self.graph.vertices))
 
-    # ─── Hints ────────────────────────────────────────────────────────────────
 
     def highlight_vertex(self, vertex_id: int, color_index: Optional[int] = None):
-        """Pulsing halo on a vertex, plus a swatch of the suggested color if given."""
         self.clear_hint()
         item = self.vertex_items.get(vertex_id)
         if item is None:
@@ -230,11 +212,9 @@ class GraphCanvas(QGraphicsView):
         self._hint_badge = None
         self.hint_vertex = None
 
-    # ─── Solution animation (forfeit) ─────────────────────────────────────────
 
     def animate_solution(self, solution: Dict[int, int], duration_ms: int = SOLUTION_ANIMATION_MS,
                          on_finished: Optional[Callable[[], None]] = None):
-        """Color vertices one by one over `duration_ms`, then call `on_finished`."""
         self.stop_animation()
         self.clear_hint()
         self.interactive = False
@@ -269,10 +249,8 @@ class GraphCanvas(QGraphicsView):
     def is_animating(self) -> bool:
         return self._anim_timer is not None
 
-    # ─── Mouse & view ─────────────────────────────────────────────────────────
 
     def vertex_at(self, scene_pos: QPointF) -> Optional[int]:
-        """Nearest vertex under the cursor, with a few pixels of slack for small nodes."""
         scale = self.transform().m11() or 1.0
         reach = self.vertex_radius + 4.0 / scale
         best, best_d = None, reach
@@ -318,7 +296,6 @@ class GraphCanvas(QGraphicsView):
         super().mouseReleaseEvent(event)
 
     def wheelEvent(self, event):
-        """Zoom around the cursor, clamped relative to the fitted view."""
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
         new_zoom = self.zoom_factor * factor
         if MIN_ZOOM <= new_zoom <= MAX_ZOOM:
@@ -327,7 +304,6 @@ class GraphCanvas(QGraphicsView):
         event.accept()
 
     def reset_zoom(self):
-        """Fit the graph (not the whole scene) so it fills the canvas; small graphs zoom at most 2×."""
         self.resetTransform()
         self.zoom_factor = 1.0
         scene_rect = self.graph_scene.sceneRect()

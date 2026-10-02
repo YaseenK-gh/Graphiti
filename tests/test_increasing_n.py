@@ -1,6 +1,4 @@
-"""STANDARD mode: each later level of a graph type needs a bigger n; max n locks in."""
-
-from tests import support  # noqa: F401  (must be first)
+from tests import support
 
 import unittest
 
@@ -12,7 +10,6 @@ from tests.test_ui_flow import UITestCase, wait_for_screen
 
 
 class TestValidateWithPrevious(unittest.TestCase):
-
     def test_must_exceed_previous(self):
         self.assertEqual(validate_n("20", "PATH", prev_n=20)[0], None)
         self.assertIn("greater than 20", validate_n("20", "PATH", prev_n=20)[1])
@@ -28,7 +25,6 @@ class TestValidateWithPrevious(unittest.TestCase):
 
 
 class TestStateRules(unittest.TestCase):
-
     def make_state(self):
         state = GameState()
         state.start_difficulty('EASY', ['PATH', 'CYCLE', 'PATH', 'PATH'])
@@ -41,7 +37,7 @@ class TestStateRules(unittest.TestCase):
         state.begin_graph(GraphManager.generate_graph('PATH', hi - 1))
         self.assertEqual(state.min_n_for('PATH'), hi)
         self.assertIsNone(state.locked_n_for('PATH'))
-        self.assertEqual(state.min_n_for('CYCLE'), GRAPH_CONSTRAINTS['CYCLE'][0])  # Independent.
+        self.assertEqual(state.min_n_for('CYCLE'), GRAPH_CONSTRAINTS['CYCLE'][0])
         state.begin_graph(GraphManager.generate_graph('PATH', hi))
         self.assertEqual(state.locked_n_for('PATH'), hi)
         self.assertEqual(state.min_n_for('PATH'), hi)
@@ -57,7 +53,6 @@ class TestStateRules(unittest.TestCase):
 
 
 class TestPreGameScreen(UITestCase):
-
     def start_path_run(self):
         self.window.show_screen(GameScreen.DIFFICULTY_SELECT)
         self.screen(GameScreen.DIFFICULTY_SELECT).start_difficulty('EASY')
@@ -78,9 +73,9 @@ class TestPreGameScreen(UITestCase):
         pre = self.start_path_run()
         hi = GRAPH_CONSTRAINTS['PATH'][1]
         self.start_graph_from_pre_game(20)
-        self.finish_level(forfeit=True)  # Forfeits still count.
+        self.finish_level(forfeit=True)
 
-        self.assertEqual(pre.n_input.text(), "21")  # Prefilled with the smallest allowed n.
+        self.assertEqual(pre.n_input.text(), "21")
         self.assertIn("n > 20", pre.rule_label.text())
         pre.n_input.setText("20")
         self.assertFalse(pre.start_btn.isEnabled())

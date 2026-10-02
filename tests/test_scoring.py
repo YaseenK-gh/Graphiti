@@ -1,6 +1,4 @@
-"""Scoring rules and GameState run bookkeeping."""
-
-from tests import support  # noqa: F401  (must be first)
+from tests import support
 
 import unittest
 
@@ -14,7 +12,6 @@ def tiny_graph(chi=2, n=10, graph_type='PATH'):
 
 
 class TestScoring(unittest.TestCase):
-
     def test_time_bonus_tiers(self):
         self.assertEqual(ScoringSystem._get_time_bonus('EASY', 10), 1000)
         self.assertEqual(ScoringSystem._get_time_bonus('EASY', 45), 500)
@@ -22,7 +19,6 @@ class TestScoring(unittest.TestCase):
         self.assertEqual(ScoringSystem._get_time_bonus('EASY', 500), 0)
 
     def test_medium_tiers_sorted_numerically(self):
-        # A string sort would check 'under_120' before 'under_60' and award 800 here.
         self.assertEqual(ScoringSystem._get_time_bonus('MEDIUM', 30), 1500)
         self.assertEqual(ScoringSystem._get_time_bonus('MEDIUM', 90), 800)
         self.assertEqual(ScoringSystem._get_time_bonus('MEDIUM', 150), 300)
@@ -36,11 +32,9 @@ class TestScoring(unittest.TestCase):
         self.assertEqual(ScoringSystem._get_time_bonus('HARD', 301), 0)
 
     def test_level_score(self):
-        # EASY: 500 base + 1000 time + 20×5 vertices + 500 optimal
         self.assertEqual(ScoringSystem.compute_level_score('EASY', 10, 20, 2, 2), 2100)
         self.assertEqual(ScoringSystem.compute_level_score('EASY', 10, 20, 3, 2), 1800)
         self.assertEqual(ScoringSystem.compute_level_score('EASY', 10, 20, 4, 2), 1600)
-        # HARD: 3000 + 500 + 30×20 + 500
         self.assertEqual(ScoringSystem.compute_level_score('HARD', 250, 30, 4, 4), 4600)
 
     def test_optimality_when_player_beats_fallback_chi(self):
@@ -55,7 +49,6 @@ class TestScoring(unittest.TestCase):
 
 
 class TestGameStateRun(unittest.TestCase):
-
     def make_state(self):
         state = GameState()
         state.start_difficulty('EASY', ['PATH', 'CYCLE'])
@@ -118,7 +111,7 @@ class TestGameStateRun(unittest.TestCase):
 
     def test_timer_pause_resume(self):
         state = self.make_state()
-        state.timer_start -= 5          # pretend 5s have passed
+        state.timer_start -= 5
         state.pause_timer()
         paused_at = state.get_elapsed_seconds()
         self.assertAlmostEqual(paused_at, 5, delta=0.1)

@@ -1,5 +1,3 @@
-"""Achievement badges and per-difficulty streaks (persisted to JSON)."""
-
 import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
@@ -7,7 +5,6 @@ from typing import Dict, List, Optional, Set, Tuple
 from core import constants
 from core.storage import load_json, save_json
 
-# badge id → (display name, how to earn it)
 BADGE_INFO: Dict[str, Tuple[str, str]] = {
     "perfect_easy": ("PERFECT NOVICE", "Complete EASY with 0 resets and 0 forfeits"),
     "perfect_medium": ("PERFECT ARCHITECT", "Complete MEDIUM with 0 resets and 0 forfeits"),
@@ -26,12 +23,6 @@ def badge_name(badge: str) -> str:
 
 @dataclass
 class AchievementSystem:
-    """Track player achievements and streaks.
-
-    A streak counts consecutive clean (0-reset, 0-forfeit) clears of a
-    difficulty; any reset or forfeit during a run breaks it.
-    """
-
     easy_streak: int = 0
     medium_streak: int = 0
     hard_streak: int = 0
@@ -49,7 +40,6 @@ class AchievementSystem:
     BADGE_HINT_MASTER = "hint_master"
     BADGE_COLORBLIND = "colorblind"
 
-    # ─── Persistence ──────────────────────────────────────────────────────────
 
     @classmethod
     def default_path(cls) -> str:
@@ -81,7 +71,6 @@ class AchievementSystem:
             "badges_earned": sorted(self.badges_earned),
         })
 
-    # ─── Rules ────────────────────────────────────────────────────────────────
 
     def _award(self, badge: str, new: List[str]):
         if badge not in self.badges_earned:
@@ -95,7 +84,6 @@ class AchievementSystem:
         setattr(self, f"{difficulty.lower()}_streak", value)
 
     def record_graph_solved(self) -> List[str]:
-        """Count a solved graph (either mode). Returns newly earned badges."""
         new: List[str] = []
         self.graphs_solved += 1
         if self.graphs_solved >= constants.COLORBLIND_SOLVES:
@@ -105,7 +93,6 @@ class AchievementSystem:
 
     def on_difficulty_completed(self, difficulty: str, resets: int, all_max_time: bool,
                                 hints_used: int, forfeits: int = 0) -> List[str]:
-        """Update streaks and badges after a difficulty. Returns newly earned badges."""
         new: List[str] = []
         key = difficulty.lower()
         if resets == 0 and forfeits == 0:

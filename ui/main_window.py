@@ -1,10 +1,11 @@
-"""QMainWindow with a stacked widget of screens."""
+import os
 
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QMainWindow, QStackedWidget, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget, QVBoxLayout
 
 from core.game_state import GameScreen, GameState
-from ui.fonts import load_fonts
+from core.settings import Settings
+from ui.fonts import app_font, load_fonts
 from ui.screens.difficulty_select_screen import DifficultySelectScreen
 from ui.screens.free_complete_screen import FreeCompleteScreen
 from ui.screens.free_graph_select_screen import FreeGraphSelectScreen
@@ -14,26 +15,33 @@ from ui.screens.playing_screen import PlayingScreen
 from ui.screens.post_difficulty_screen import PostDifficultyScreen
 from ui.screens.post_level_screen import PostLevelScreen
 from ui.screens.pre_game_screen import PreGameScreen
-from ui.styles import get_stylesheet
+from ui.styles import PAGE_MARGIN, get_stylesheet
 from ui.widgets.pixel import PixelBackground
 
 
 class MainWindow(QMainWindow):
-    """Main application window with screen stack management."""
-
     def __init__(self, game_state: GameState = None):
         super().__init__()
-        self.setWindowTitle("Graph Coloring — Color Theorem")
+        self.setWindowTitle("Graphiti")
         self.setGeometry(100, 100, 1400, 820)
         self.setMinimumSize(1200, 760)
 
         load_fonts()
-        # Game state (shared across all screens)
+        QApplication.instance().setFont(app_font())
         self.game_state = game_state or GameState()
+        self.settings = Settings.load()
+        self.music = None
+        if not os.environ.get("GRAPH_COLORING_NO_AUDIO"):
+            from ui.audio import MusicPlayer
+            self.music = MusicPlayer(parent=self)
+            self.music.set_volume(self.settings.volume)
+            self.music.set_muted(self.settings.muted)
+            self.music.start()
 
         background = PixelBackground()
+        self.overlay_host = background
         page = QVBoxLayout(background)
-        page.setContentsMargins(16, 16, 16, 16)
+        page.setContentsMargins(PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN, PAGE_MARGIN)
         self.stacked_widget = QStackedWidget()
         page.addWidget(self.stacked_widget)
         self.setCentralWidget(background)
@@ -52,7 +60,6 @@ class MainWindow(QMainWindow):
         for screen in self.screens.values():
             self.stacked_widget.addWidget(screen)
 
-        # 100ms tick for the live timer display.
         self.update_timer = QTimer(self)
         self.update_timer.timeout.connect(self.update_game)
         self.update_timer.start(100)
@@ -61,7 +68,6 @@ class MainWindow(QMainWindow):
         self.show_screen(GameScreen.MENU)
 
     def show_screen(self, screen: GameScreen):
-        """Transition to a new screen."""
         previous = self.game_state.current_screen
         if previous != screen and previous in self.screens:
             self.screens[previous].on_hide()

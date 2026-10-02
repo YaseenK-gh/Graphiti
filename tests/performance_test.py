@@ -1,14 +1,3 @@
-"""Performance checks from the final plan. Run directly: ``python tests/performance_test.py``.
-
-Checks (thresholds from core/constants.py):
-  * layout time per type at max n       < LAYOUT_TIMEOUT_MS (1500 ms)
-  * chromatic number time (hard types)  < CHROMATIC_TIMEOUT_MS (500 ms) + small overhead
-  * generation of every type at max n succeeds
-  * memory over 20+ graphs (incl. canvas rendering) peak < MEMORY_LIMIT_MB and stable
-  * rendering at max complexity         >= MIN_FPS (30)
-Exits non-zero if any check fails.
-"""
-
 import os
 import random
 import sys
@@ -16,16 +5,15 @@ import time
 import tracemalloc
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tests import support  # noqa: E402,F401  (headless Qt + throwaway data dir)
+from tests import support
 
-from algorithms.generators import generate_graph_by_type  # noqa: E402
-from algorithms.layouts import compute_layout  # noqa: E402
-from algorithms.solvers import compute_chromatic_number  # noqa: E402
-from core.constants import (CHROMATIC_TIMEOUT_MS, GRAPH_CONSTRAINTS, GRAPH_TYPES,  # noqa: E402
+from algorithms.generators import generate_graph_by_type
+from algorithms.layouts import compute_layout
+from algorithms.solvers import compute_chromatic_number
+from core.constants import (CHROMATIC_TIMEOUT_MS, GRAPH_CONSTRAINTS, GRAPH_TYPES,
                             LAYOUT_TIMEOUT_MS, MEMORY_LIMIT_MB, MIN_FPS)
-from core.graph_manager import GraphManager  # noqa: E402
+from core.graph_manager import GraphManager
 
-# Cooperative timeouts check the clock periodically, so allow a little slack.
 CHROMATIC_SLACK_MS = 50
 
 failures = []
@@ -38,7 +26,6 @@ def report(ok: bool, label: str):
 
 
 def process_rss_mb() -> float:
-    """Resident memory of this process in MB (Windows via psapi, else getrusage)."""
     try:
         if sys.platform == "win32":
             import ctypes
@@ -63,12 +50,11 @@ def process_rss_mb() -> float:
             return counters.WorkingSetSize / 1024 / 1024
         import resource
         return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-    except Exception:  # noqa: BLE001 — diagnostics only
+    except Exception:
         return float("nan")
 
 
 def make_canvas():
-    """A shown GraphCanvas, or None if the UI layer isn't available."""
     try:
         support.qapp()
         from ui.widgets.graph_canvas import GraphCanvas
@@ -91,7 +77,6 @@ def test_generation_all_types():
 
 
 def test_layout_performance():
-    """Test layout algorithm speed (force-directed fallback used where the plan calls for it)."""
     print("\nTesting layout performance...")
     test_cases = [('PATH', 60), ('TREE', 50), ('BIPARTITE', 45), ('WHEEL', 35),
                   ('OUTERPLANAR', 40), ('CHORDAL', 40), ('TRIANGLE_FREE', 40),
@@ -99,14 +84,12 @@ def test_layout_performance():
     for graph_type, n in test_cases:
         vertices, edges = generate_graph_by_type(graph_type, n)
         start = time.perf_counter()
-        # No embedding passed: the planar types exercise the force-directed worst case.
         compute_layout(graph_type, n, vertices, edges)
         elapsed = (time.perf_counter() - start) * 1000
         report(elapsed < LAYOUT_TIMEOUT_MS, f"{graph_type} (n={n}): {elapsed:.0f}ms")
 
 
 def test_chromatic_timeout():
-    """Test chromatic number computation stays within its time budget."""
     print("\nTesting chromatic number computation...")
     for graph_type in ['TRIANGLE_FREE', 'NEAR_TRIANGULATION', 'PLANAR', 'CHORDAL']:
         lo, hi = GRAPH_CONSTRAINTS[graph_type]
@@ -120,7 +103,6 @@ def test_chromatic_timeout():
 
 
 def test_memory_stability(canvas):
-    """Memory over 24 generated (and, when available, rendered) graphs."""
     label = "with canvas rendering" if canvas else "generation only (UI not built yet)"
     print(f"\nTesting memory stability over 24 graphs ({label})...")
     tracemalloc.start()
@@ -147,20 +129,17 @@ def test_memory_stability(canvas):
            f"Python peak {peak / 1024 / 1024:.2f}MB < {MEMORY_LIMIT_MB}MB")
     report(rss_end < MEMORY_LIMIT_MB,
            f"Process RSS {rss_end:.0f}MB < {MEMORY_LIMIT_MB}MB (started at {rss_start:.0f}MB)")
-    # Stable = no steady climb: the last sample isn't much above the first.
     growth = (samples[-1] - samples[0]) / 1024 / 1024
     report(growth < 5, f"Python heap growth across run {growth:+.2f}MB (< 5MB)")
     if canvas is not None:
         from ui.widgets.graph_items import EdgeItem, VertexItem
         expected = len(canvas.graph.vertices) + len(canvas.graph.edges)
-        # Vertex letters and conflict tags are child items; count the vertices/edges themselves.
         graph_items = [i for i in canvas.graph_scene.items() if isinstance(i, (VertexItem, EdgeItem))]
         report(len(graph_items) == expected,
                f"Scene holds only the current graph ({len(graph_items)} vertices + edges)")
 
 
 def test_render_fps(canvas):
-    """Frames per second when repainting the densest graph."""
     if canvas is None:
         print("\n(skipping FPS test: UI not built yet)")
         return
@@ -169,7 +148,6 @@ def test_render_fps(canvas):
     for graph_type in ('COMPLETE_BIPARTITE', 'PLANAR', 'PATH'):
         graph = GraphManager.generate_graph(graph_type, GRAPH_CONSTRAINTS[graph_type][1])
         canvas.set_graph(graph)
-        # Color everything the same so every edge renders in the (thicker) conflict style.
         for v in graph.vertices:
             canvas.color_vertex(v, 0)
         image = QImage(canvas.viewport().size(), QImage.Format.Format_ARGB32_Premultiplied)

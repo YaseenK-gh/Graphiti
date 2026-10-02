@@ -1,5 +1,3 @@
-"""Small JSON persistence helpers: atomic writes and corrupt-file quarantine."""
-
 import json
 import logging
 import os
@@ -9,7 +7,6 @@ logger = logging.getLogger(__name__)
 
 
 def load_json(path: str, default: Any) -> Any:
-    """Load JSON, returning `default` if missing. A corrupt file is renamed aside, not lost."""
     if not os.path.exists(path):
         return default
     try:
@@ -26,7 +23,6 @@ def load_json(path: str, default: Any) -> Any:
 
 
 def save_json(path: str, data: Any) -> bool:
-    """Atomically write JSON (temp file + rename). Returns False (and logs) on failure."""
     try:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         tmp = path + ".tmp"

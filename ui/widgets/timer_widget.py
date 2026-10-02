@@ -1,10 +1,8 @@
-"""Large MM:SS LCD timer: faint 88:88 ghost digits, a hard shadow, then the time."""
-
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QLabel
 
-from core.constants import UI_DARK_LINE, UI_LIME, UI_TIMER_SHADOW
+from core.constants import UI_LIME
 from ui.fonts import pixel_font
 from ui.styles import SIZE_TIMER
 
@@ -15,9 +13,6 @@ def format_time(seconds: float) -> str:
 
 
 class TimerWidget(QLabel):
-
-    SHADOW = 3
-
     def __init__(self, parent=None):
         super().__init__("00:00", parent)
         self._color = UI_LIME
@@ -42,11 +37,5 @@ class TimerWidget(QLabel):
     def paintEvent(self, event):
         p = QPainter(self)
         p.setFont(pixel_font(SIZE_TIMER))
-        align = Qt.AlignmentFlag.AlignCenter
-        rect = self.rect().adjusted(0, 0, -self.SHADOW, -self.SHADOW)
-        p.setPen(QColor(UI_DARK_LINE))
-        p.drawText(rect, align, "88:88")
-        p.setPen(QColor(UI_TIMER_SHADOW))
-        p.drawText(rect.translated(self.SHADOW, self.SHADOW), align, self.text())
         p.setPen(QColor(self._color))
-        p.drawText(rect, align, self.text())
+        p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self.text())

@@ -1,67 +1,54 @@
-"""Main game screen: interactive graph, timer, palette, stats and controls."""
-
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QLabel, QMessageBox, QVBoxLayout
+from PySide6.QtWidgets import QHBoxLayout, QLabel
 
 from algorithms.solvers import optimal_coloring
-from core.constants import (GRAPH_DISPLAY_NAMES, PALETTE, PALETTE_KEYS, PALETTE_NAMES,
-                            SOLUTION_SOLVER_TIMEOUT_MS, UI_BG, UI_BORDER, UI_DANGER_TEXT, UI_FIELD,
-                            UI_GOLD, UI_INK, UI_INNER, UI_LIME, UI_LIME_DIM, UI_RED)
+from core.constants import (GRAPH_DISPLAY_NAMES, GRAPH_SHORT_NAMES, PALETTE, PALETTE_KEYS, PALETTE_NAMES,
+                            SOLUTION_SOLVER_TIMEOUT_MS, UI_BG, UI_BORDER, UI_DANGER_TEXT,
+                            UI_GOLD, UI_LIME, UI_LIME_DIM, UI_RED)
 from core.game_state import GameScreen
 from core.hint_system import HintSystem
 from core.scoring import ScoringSystem
 from ui.dialogs import PauseDialog
 from ui.screens import (BaseScreen, make_button, make_divider, make_label, make_panel,
-                        set_text_color)
+                        panel_layout, set_text_color)
+from ui.styles import GAP, GAP_TIGHT, PAGE_MARGIN
+from ui.overlay import confirm
 from ui.widgets.color_palette import ColorPalette
 from ui.widgets.graph_canvas import GraphCanvas
 from ui.widgets.stats_panel import StatsPanel
 from ui.widgets.timer_widget import TimerWidget, format_time
 
-# Timer color per time-bonus tier: max bonus, then progressively worse.
 TIER_COLORS = [UI_LIME, UI_GOLD, "#E09040", UI_DANGER_TEXT]
-SIDEBAR_WIDTH = 400
+SIDEBAR_FIT = (0.3, 440, 520)
 LEFT = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
 RIGHT = Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
 
 
 class PlayingScreen(BaseScreen):
-    """Main game playing screen with graph visualization."""
-
     def __init__(self, main_window, parent=None):
         super().__init__(main_window, parent)
-        self.completion_delay_ms = 600      # Pause on the solved graph before moving on.
-        self.forfeit_linger_ms = 900        # Show the revealed solution before moving on.
+        self.completion_delay_ms = 600
+        self.forfeit_linger_ms = 900
         self._completing = False
         self.init_ui()
         self.init_shortcuts()
 
-    # ─── Construction ─────────────────────────────────────────────────────────
 
     def init_ui(self):
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
-        main_layout.setSpacing(16)
+        main_layout.setSpacing(PAGE_MARGIN)
         main_layout.addWidget(self.build_canvas_panel(), 1)
-
-        side = QVBoxLayout()
-        side.setSpacing(12)
-        side.addWidget(self.build_sidebar(), 1)
-        side.addWidget(self.build_legend())
-        main_layout.addLayout(side)
+        main_layout.addWidget(self.build_sidebar())
 
     def build_canvas_panel(self):
         panel = make_panel()
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(18, 16, 18, 14)
-        layout.setSpacing(10)
+        layout = panel_layout(panel, compact=True)
 
         header = QHBoxLayout()
-        header.setSpacing(12)
-        self.header_label = QLabel()
-        self.header_label.setStyleSheet(f"background: {UI_FIELD}; color: {UI_INK}; font-size: 11px; "
-                                        f"border: 3px solid {UI_BORDER}; padding: 8px 10px;")
+        header.setSpacing(GAP)
+        self.header_label = make_label(role="strip", align=LEFT)
         header.addWidget(self.header_label, 1)
         self.chi_badge = make_label(role="badge")
         header.addWidget(self.chi_badge)
@@ -73,23 +60,31 @@ class PlayingScreen(BaseScreen):
         layout.addWidget(self.canvas, 1)
 
         footer = QHBoxLayout()
-        footer.addWidget(make_label("LEFT-CLICK: COLOR · RIGHT-CLICK: ERASE", role="caption",
-                                    align=LEFT))
+        footer.setSpacing(GAP_TIGHT)
+
+        def sample(style: str, w: int = 16, h: int = 16) -> QLabel:
+            label = QLabel()
+            label.setFixedSize(w, h)
+            label.setStyleSheet(style)
+            return label
+
+        for swatch, text in ((sample(f"background: #FFFFFF; border: 2px solid {UI_BORDER};"), "UNCOLORED"),
+                             (sample(f"background: {PALETTE[4]}; border: 2px solid {UI_BORDER};"), "COLORED"),
+                             (sample(f"background: {UI_RED};", 18, 4), "CONFLICT")):
+            footer.addWidget(swatch, alignment=Qt.AlignmentFlag.AlignVCenter)
+            footer.addWidget(make_label(text, role="caption", align=LEFT))
+            footer.addSpacing(GAP)
         footer.addStretch()
-        footer.addWidget(make_label("WHEEL: ZOOM · MIDDLE-DRAG: PAN", role="caption", align=RIGHT))
+        footer.addWidget(make_label("RIGHT-CLICK: ERASE", role="caption", align=RIGHT))
         layout.addLayout(footer)
         return panel
 
     def build_sidebar(self):
-        panel = make_panel(dark=True)
-        panel.setFixedWidth(SIDEBAR_WIDTH)
-        self.right_panel = QVBoxLayout(panel)
+        panel = self.fit(make_panel(dark=True), *SIDEBAR_FIT)
+        self.right_panel = panel_layout(panel, compact=True, spacing=GAP_TIGHT)
         right = self.right_panel
-        right.setContentsMargins(22, 18, 22, 18)
-        right.setSpacing(7)
 
-        self.mode_label = make_label(align=LEFT)
-        set_text_color(self.mode_label, UI_INNER)
+        self.mode_label = make_label(role="caption", align=LEFT)
         right.addWidget(self.mode_label)
         self.type_label = make_label(role="heading", align=LEFT)
         right.addWidget(self.type_label)
@@ -101,14 +96,14 @@ class PlayingScreen(BaseScreen):
 
         self.stats = StatsPanel()
         right.addWidget(self.stats)
-        # Plan-compatible aliases.
         self.score_label = self.stats.score_label
         self.conflict_label = self.stats.conflict_label
         right.addWidget(make_divider(dark=True))
 
-        right.addWidget(make_label("PALETTE (1–9, 0)", role="caption", align=LEFT))
+        right.addWidget(make_label("PALETTE (1-9, 0)", role="caption", align=LEFT))
         self.palette = ColorPalette()
         self.palette.color_selected.connect(self.on_color_selected)
+        self.palette.setToolTip("KEYS 1-5: TOP ROW | KEYS 6-9, 0: BOTTOM ROW")
         right.addWidget(self.palette)
         self.color_buttons = self.palette.buttons
         self.active_label = make_label(role="caption", align=LEFT)
@@ -117,7 +112,6 @@ class PlayingScreen(BaseScreen):
 
         right.addStretch()
         self.message_label = make_label(role="body", wrap=True, align=LEFT)
-        self.message_label.setMinimumHeight(46)
         right.addWidget(self.message_label)
 
         hints_row = QHBoxLayout()
@@ -126,11 +120,11 @@ class PlayingScreen(BaseScreen):
         hints_row.addWidget(self.points_label)
         hints_row.addWidget(self.hints_label)
         right.addLayout(hints_row)
-        self.hint_btn = make_button("BUY HINT (H)", self.on_buy_hint, variant="dark", small=True)
+        self.hint_btn = make_button("HINT (H)", self.on_buy_hint, variant="dark", small=True)
         right.addWidget(self.hint_btn)
 
         controls = QHBoxLayout()
-        controls.setSpacing(8)
+        controls.setSpacing(GAP)
         self.reset_btn = make_button("RESET (R)", self.on_reset_requested, small=True)
         self.menu_btn = make_button("MENU (ESC)", self.on_menu_clicked, small=True)
         controls.addWidget(self.reset_btn)
@@ -139,36 +133,6 @@ class PlayingScreen(BaseScreen):
         self.forfeit_btn = make_button("FORFEIT (SHIFT+S)", self.on_forfeit_requested,
                                        variant="danger", small=True)
         right.addWidget(self.forfeit_btn)
-        return panel
-
-    def build_legend(self):
-        panel = make_panel(dark=True)
-        panel.setFixedWidth(SIDEBAR_WIDTH)
-        grid = QGridLayout(panel)
-        grid.setContentsMargins(22, 14, 22, 14)
-        grid.setHorizontalSpacing(10)
-        grid.setVerticalSpacing(8)
-
-        def sample(style: str, w: int = 16, h: int = 16) -> QLabel:
-            label = QLabel()
-            label.setFixedSize(w, h)
-            label.setStyleSheet(style)
-            return label
-
-        items = (
-            (sample(f"background: {PALETTE[4]}; border: 2px solid {UI_BORDER};"), "COLORED OK"),
-            (sample(f"background: #FFFFFF; border: 2px solid {UI_BORDER};"), "UNCOLORED"),
-            (sample(f"background: {UI_RED};", 18, 4), "CONFLICT EDGE"),
-        )
-        grid.addWidget(make_label("LEGEND", role="caption", align=LEFT), 0, 0, 1, 4)
-        for i, (swatch, text) in enumerate(items):
-            row, col = 1 + i // 2, (i % 2) * 2
-            grid.addWidget(swatch, row, col, alignment=Qt.AlignmentFlag.AlignCenter)
-            label = make_label(text, role="caption", align=LEFT)
-            set_text_color(label, UI_LIME_DIM)
-            grid.addWidget(label, row, col + 1)
-        grid.setColumnStretch(1, 1)
-        grid.setColumnStretch(3, 1)
         return panel
 
     def init_shortcuts(self):
@@ -184,10 +148,8 @@ class PlayingScreen(BaseScreen):
         bind("Escape", self.on_menu_clicked)
         bind("Shift+S", self.on_forfeit_requested)
 
-    # ─── Lifecycle ────────────────────────────────────────────────────────────
 
     def on_show(self):
-        """Load the prepared graph and start the clock."""
         state = self.game_state
         self._completing = False
         state.reset_for_new_graph()
@@ -206,43 +168,37 @@ class PlayingScreen(BaseScreen):
     def is_standard(self) -> bool:
         return self.game_state.is_standard()
 
-    # ─── Display ──────────────────────────────────────────────────────────────
 
     def update_ui(self):
-        """Update all labels from the game state."""
         state = self.game_state
         graph = state.current_graph
         if graph is None:
             return
-        name = GRAPH_DISPLAY_NAMES[graph.type]
-        self.type_label.setText(f"{name} · n = {graph.n}")
-        # Long names drop to a smaller size so they fit the sidebar on one line.
-        size = 16 if len(self.type_label.text()) <= 21 else 12
-        self.type_label.setStyleSheet(f"font-size: {size}px;")
-        self.chi_badge.setText(f"χ = {graph.chromatic_number}")
+        name = GRAPH_SHORT_NAMES[graph.type]
+        self.type_label.setText(name)
+        self.chi_badge.setText(f"{graph.chromatic_number} COLORS")
         if self.is_standard():
             progress = f"GRAPH {state.current_graph_index + 1} OF {len(state.graph_queue)}"
-            self.mode_label.setText(f"{state.difficulty} · {progress}")
-            self.header_label.setText(f"{state.difficulty} · {progress} · {name} · n={graph.n}")
+            self.mode_label.setText(f"{state.difficulty} | {progress} | n = {graph.n}")
+            self.header_label.setText(f"{GRAPH_DISPLAY_NAMES[graph.type]} | n = {graph.n}")
             self.stats.set_score(f"SCORE: {state.provisional_score:,}")
             self.bonus_label.setText(f"MAX TIME BONUS UNDER "
                                      f"{format_time(ScoringSystem.max_time_threshold(state.difficulty))}")
         else:
-            self.mode_label.setText("FREE MODE · PRACTICE")
-            self.header_label.setText(f"FREE · {name} · n={graph.n}")
+            self.mode_label.setText(f"FREE MODE | n = {graph.n}")
+            self.header_label.setText(f"FREE MODE | {GRAPH_DISPLAY_NAMES[graph.type]} | n = {graph.n}")
             self.stats.set_score(f"EDGES: {len(graph.edges)}")
-            self.bonus_label.setText("NO SCORING — TAKE YOUR TIME")
+            self.bonus_label.setText("NO SCORING - TAKE YOUR TIME")
         self.update_conflict_counter()
         self.update_hints_display()
 
     def update_hints_display(self):
-        """Points, hints used, and the buy button (disabled when unaffordable/maxed/cooling down)."""
         state = self.game_state
         cost = state.hint_cost()
         if self.is_standard():
             self.points_label.setText(f"POINTS: {state.provisional_score:,}")
         else:
-            self.points_label.setText("POINTS: —")
+            self.points_label.setText("POINTS: -")
         self.hints_label.setText(f"HINTS USED: {state.hints_used}/{HintSystem.MAX_HINTS_PER_LEVEL}")
 
         blocked = state.hint_block_reason()
@@ -250,7 +206,7 @@ class PlayingScreen(BaseScreen):
         if cooldown > 0 and state.hints_used < HintSystem.MAX_HINTS_PER_LEVEL:
             text = f"HINT COOLDOWN {cooldown / 1000:.0f}s"
         elif cost:
-            text = f"BUY HINT (H) — {cost:,} PTS"
+            text = f"HINT (H) - {cost:,} PTS"
         else:
             text = "FREE HINT (H)"
         if self.hint_btn.text() != text:
@@ -268,7 +224,6 @@ class PlayingScreen(BaseScreen):
         self.stats.set_colors(self.canvas.colors_used(), graph.chromatic_number)
 
     def update_timer_display(self):
-        """Refresh the timer (called every 100ms by the main window)."""
         state = self.game_state
         elapsed = state.get_elapsed_seconds()
         self.timer_label.set_elapsed(elapsed)
@@ -278,21 +233,19 @@ class PlayingScreen(BaseScreen):
             self.timer_label.set_color(TIER_COLORS[min(tier, len(TIER_COLORS) - 1)])
         else:
             self.timer_label.set_color(UI_LIME)
-        self.update_hints_display()  # Keeps the cooldown countdown live.
+        self.update_hints_display()
 
     def show_message(self, text: str, color: str = UI_BG):
         self.message_label.setText(text)
         self.message_label.setStyleSheet(f"color: {color};")
 
-    # ─── Interaction ──────────────────────────────────────────────────────────
 
     def on_coloring_changed(self):
         self.update_conflict_counter()
         if self.canvas.hint_vertex is None and self.palette.suggested is not None:
-            self.palette.set_suggested(None)  # The hinted vertex has been colored.
+            self.palette.set_suggested(None)
 
     def on_buy_hint(self):
-        """Purchase a hint (with cooldown/points/max checks) and show it on the canvas."""
         if self._completing or self.canvas.is_animating():
             return
         hint, error = self.game_state.buy_hint()
@@ -321,7 +274,6 @@ class PlayingScreen(BaseScreen):
                                   f"({PALETTE_NAMES[color_index]})")
 
     def on_graph_completed(self):
-        """Every vertex colored, no conflicts: stop the clock and move on shortly."""
         if self._completing:
             return
         self._completing = True
@@ -329,7 +281,7 @@ class PlayingScreen(BaseScreen):
         self.game_state.stop_timer()
         self.update_timer_display()
         colors = self.canvas.colors_used()
-        self.show_message("✓ SOLVED!", UI_LIME)
+        self.show_message("SOLVED!", UI_LIME)
         QTimer.singleShot(self.completion_delay_ms, lambda: self._finish_level(colors, False))
 
     def _finish_level(self, colors_used: int, forfeited: bool):
@@ -343,17 +295,15 @@ class PlayingScreen(BaseScreen):
         if self._completing or self.canvas.is_animating():
             return
         if self.is_standard():
-            reply = QMessageBox.question(
-                self, "Reset level?",
-                "Restart this graph? You lose 30% of your provisional score "
-                f"({self.game_state.provisional_score:,} → "
-                f"{ScoringSystem.apply_reset_penalty(self.game_state.provisional_score, self.game_state.difficulty):,}).")
-            if reply != QMessageBox.StandardButton.Yes:
+            score = self.game_state.provisional_score
+            after = ScoringSystem.apply_reset_penalty(score, self.game_state.difficulty)
+            if not confirm(self, "Reset level?",
+                           f"Restart this graph? You lose 30% of your provisional score "
+                           f"({score:,} to {after:,}).", yes="RESET", no="CANCEL", danger=True):
                 return
         self.perform_reset()
 
     def perform_reset(self) -> int:
-        """Clear the graph and restart the timer (applies the reset penalty in STANDARD)."""
         lost = self.game_state.apply_level_reset()
         self.canvas.clear_coloring()
         self.palette.set_suggested(None)
@@ -367,29 +317,26 @@ class PlayingScreen(BaseScreen):
         if self._completing or self.canvas.is_animating():
             return
         if self.is_standard():
-            reply = QMessageBox.question(
-                self, "Forfeit graph?",
-                "Give up on this graph? It scores 0 points and the solution is revealed.")
-            if reply != QMessageBox.StandardButton.Yes:
+            if not confirm(self, "Forfeit graph?",
+                           "Give up on this graph? It scores 0 points and the solution is revealed.",
+                           yes="FORFEIT", no="KEEP PLAYING", danger=True):
                 return
         self.perform_forfeit()
 
     def perform_forfeit(self):
-        """Reveal an optimal coloring, then record the level as forfeited."""
         self._completing = True
         self.game_state.stop_timer()
         graph = self.game_state.current_graph
         solution = optimal_coloring(graph.n, graph.edges, graph.chromatic_number,
                                     timeout_ms=SOLUTION_SOLVER_TIMEOUT_MS)
         colors = len(set(solution.values()))
-        self.show_message("FORFEITED — HERE'S A SOLUTION", UI_DANGER_TEXT)
+        self.show_message("FORFEITED - HERE'S A SOLUTION", UI_DANGER_TEXT)
         self.canvas.animate_solution(
             solution,
             on_finished=lambda: QTimer.singleShot(self.forfeit_linger_ms,
                                                   lambda: self._finish_level(colors, True)))
 
     def on_menu_clicked(self):
-        """Pause menu. The clock keeps running while it's open."""
         if self._completing or self.canvas.is_animating():
             return
         dialog = self.make_pause_dialog()
@@ -409,10 +356,9 @@ class PlayingScreen(BaseScreen):
 
     def quit_to_menu(self):
         if self.is_standard():
-            reply = QMessageBox.question(
-                self, "Quit run?",
-                "Quit to the menu? Progress is not saved — this difficulty restarts from graph 1.")
-            if reply != QMessageBox.StandardButton.Yes:
+            if not confirm(self, "Quit run?",
+                           "Quit to the menu? Progress is not saved - this difficulty restarts "
+                           "from graph 1.", yes="QUIT RUN", no="STAY", danger=True):
                 return
             self.game_state.abandon_run()
         else:

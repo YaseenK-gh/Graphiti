@@ -1,9 +1,3 @@
-"""Shared test setup. Import this first in every test module (``from tests import support``).
-
-Points the leaderboard/achievement files at a throwaway directory and runs Qt
-headless, so tests never touch real player data or open windows.
-"""
-
 import os
 import sys
 import tempfile
@@ -15,12 +9,12 @@ if ROOT not in sys.path:
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 TEST_DATA_DIR = tempfile.mkdtemp(prefix="graph_coloring_test_")
 os.environ["GRAPH_COLORING_DATA_DIR"] = TEST_DATA_DIR
+os.environ["GRAPH_COLORING_NO_AUDIO"] = "1"
 
 _app = None
 
 
 def qapp():
-    """The shared QApplication (created on first use)."""
     global _app
     from PySide6.QtWidgets import QApplication
     _app = QApplication.instance() or QApplication([])

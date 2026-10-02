@@ -1,6 +1,4 @@
-"""Phase 1: layouts stay on-canvas, don't overlap nodes, and are crossing-free where they should be."""
-
-from tests import support  # noqa: F401  (must be first)
+from tests import support
 
 import math
 import random
@@ -14,10 +12,8 @@ from algorithms.layouts import (compute_layout, edges_grazing_vertices, layout_f
 from core.constants import (CANVAS_HEIGHT, CANVAS_PADDING, CANVAS_WIDTH, GRAPH_CONSTRAINTS,
                             GRAPH_TYPES, LAYOUT_TIMEOUT_MS)
 
-# Families whose layout is crossing-free by construction.
-CROSSING_FREE = {'CYCLE', 'WHEEL', 'OUTERPLANAR', 'TRIANGLE_FREE', 'NEAR_TRIANGULATION', 'PLANAR'}
-# Families drawn deliberately tangled.
-TANGLED = ('PATH', 'TREE')
+CROSSING_FREE = {'PATH', 'TREE', 'CYCLE', 'WHEEL', 'OUTERPLANAR', 'TRIANGLE_FREE',
+                 'NEAR_TRIANGULATION', 'PLANAR'}
 
 
 def min_pair_distance(layout):
@@ -26,7 +22,6 @@ def min_pair_distance(layout):
 
 
 class TestLayouts(unittest.TestCase):
-
     def test_all_types_in_bounds_no_overlap(self):
         for graph_type in GRAPH_TYPES:
             lo, hi = GRAPH_CONSTRAINTS[graph_type]
@@ -38,7 +33,6 @@ class TestLayouts(unittest.TestCase):
                     for x, y in layout.values():
                         self.assertTrue(CANVAS_PADDING - 1e-6 <= x <= CANVAS_WIDTH - CANVAS_PADDING + 1e-6)
                         self.assertTrue(CANVAS_PADDING - 1e-6 <= y <= CANVAS_HEIGHT - CANVAS_PADDING + 1e-6)
-                    # Nodes must not overlap (diameter = 2r).
                     self.assertGreaterEqual(min_pair_distance(layout), 2 * vertex_radius(n) - 1e-6)
 
     def test_crossing_free_families(self):
@@ -51,20 +45,26 @@ class TestLayouts(unittest.TestCase):
                         layout = compute_layout(graph_type, n, v, e, pos)
                         self.assertEqual(count_crossings(e, layout), 0)
 
-    def test_tangled_families_cross_but_never_touch_other_vertices(self):
-        for graph_type in TANGLED:
+    def test_paths_and_trees_never_cross_or_touch_other_vertices(self):
+        for graph_type in ('PATH', 'TREE'):
             lo, hi = GRAPH_CONSTRAINTS[graph_type]
             for n in (lo, 10, (lo + hi) // 2, hi):
-                for seed in range(3):
+                for seed in range(12):
                     with self.subTest(type=graph_type, n=n, seed=seed):
                         random.seed(seed)
                         v, e, pos = generate_graph_full(graph_type, n, rng=random.Random(seed))
                         start = time.perf_counter()
                         layout = compute_layout(graph_type, n, v, e, pos)
                         self.assertLess((time.perf_counter() - start) * 1000, LAYOUT_TIMEOUT_MS)
+                        self.assertEqual(count_crossings(e, layout), 0)
                         self.assertEqual(edges_grazing_vertices(e, layout, vertex_radius(n)), 0)
-                        if n >= 10:
-                            self.assertGreaterEqual(count_crossings(e, layout), n // 2)
+
+    def test_paths_wind_instead_of_running_straight(self):
+        v, e, pos = generate_graph_full('PATH', 40, rng=random.Random(2))
+        random.seed(2)
+        layout = compute_layout('PATH', 40, v, e, pos)
+        self.assertGreater(len({round(y) for _, y in layout.values()}), 3)
+        self.assertGreater(len({round(x) for x, _ in layout.values()}), 3)
 
     def test_path_labels_are_shuffled(self):
         _, e, _ = generate_graph_full('PATH', 30, rng=random.Random(1))

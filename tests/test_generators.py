@@ -1,6 +1,4 @@
-"""Phase 1: every graph type generates valid, correctly-structured graphs across its n range."""
-
-from tests import support  # noqa: F401  (must be first)
+from tests import support
 
 import random
 import time
@@ -21,7 +19,6 @@ def sample_ns(graph_type):
 
 
 class TestAllTypesGenerate(unittest.TestCase):
-
     def test_eleven_types_defined(self):
         self.assertEqual(len(GRAPH_TYPES), 11)
         self.assertNotIn('COMPLETE', GRAPH_TYPES)
@@ -40,7 +37,6 @@ class TestAllTypesGenerate(unittest.TestCase):
                         self.assertTrue(is_connected(n, edges), "disconnected")
 
     def test_full_pipeline_every_type_at_max_n(self):
-        """GraphManager builds a complete Graph (layout + χ) for every type at its max n."""
         for graph_type in GRAPH_TYPES:
             n = GRAPH_CONSTRAINTS[graph_type][1]
             with self.subTest(type=graph_type):
@@ -62,7 +58,6 @@ class TestAllTypesGenerate(unittest.TestCase):
 
 
 class TestStructuralProperties(unittest.TestCase):
-
     def gen(self, graph_type, n, seed=0):
         return generate_graph_full(graph_type, n, rng=random.Random(seed))
 
@@ -70,11 +65,11 @@ class TestStructuralProperties(unittest.TestCase):
         _, e, _ = self.gen('PATH', 10)
         self.assertEqual(len(e), 9)
         degrees = [sum(v in edge for edge in e) for v in range(10)]
-        self.assertEqual(sorted(degrees), [1, 1] + [2] * 8)  # One chain, two ends.
+        self.assertEqual(sorted(degrees), [1, 1] + [2] * 8)
         _, e, _ = self.gen('CYCLE', 10)
         self.assertEqual(len(e), 10)
         _, e, _ = self.gen('WHEEL', 10)
-        self.assertEqual(len(e), 18)  # 9 spokes + 9 rim
+        self.assertEqual(len(e), 18)
 
     def test_tree_is_tree(self):
         for n in sample_ns('TREE'):
@@ -95,7 +90,7 @@ class TestStructuralProperties(unittest.TestCase):
         for n in sample_ns('OUTERPLANAR'):
             _, e, _ = self.gen('OUTERPLANAR', n, seed=n)
             self.assertLessEqual(len(e), 2 * n - 3)
-            self.assertGreaterEqual(len(e), n)  # boundary cycle kept
+            self.assertGreaterEqual(len(e), n)
 
     def test_chordal_is_chordal(self):
         for n in sample_ns('CHORDAL'):
@@ -161,8 +156,6 @@ class TestStructuralProperties(unittest.TestCase):
 
 
 class TestChromaticNumbers(unittest.TestCase):
-    """compute_chromatic_number agrees with an exact search for every type."""
-
     def test_closed_forms_and_solver_agree_with_exact_search(self):
         for graph_type in GRAPH_TYPES:
             lo, hi = GRAPH_CONSTRAINTS[graph_type]
@@ -180,7 +173,6 @@ class TestChromaticNumbers(unittest.TestCase):
                             self.assertIsNone(extend_coloring(adj, n, chi - 1))
 
     def test_wheel_formula(self):
-        # Rim of n-1 vertices: even rim → 3, odd rim → 4.
         self.assertEqual(compute_chromatic_number('WHEEL', 5, generate_graph_by_type('WHEEL', 5)[1]), 3)
         self.assertEqual(compute_chromatic_number('WHEEL', 6, generate_graph_by_type('WHEEL', 6)[1]), 4)
 
