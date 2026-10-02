@@ -9,13 +9,13 @@ from PySide6.QtWidgets import QApplication
 
 from core.accessories import CATALOG, CURSOR, DEFAULT, VERTEX, Wallet, find, items_of
 from core.achievements import AchievementSystem
-from core.constants import DEFAULT_NODE_STROKE
+from core.constants import DEFAULT_NODE_STROKE, PALETTE, PALETTE_NAMES
 from core.game_state import GameScreen, GameState
 from core.graph_manager import GraphManager
 from core.leaderboard import LeaderboardSystem
 from ui import accessories
 from ui.dialogs import HowToPlayDialog
-from ui.shop import AccessoriesDialog
+from ui.shop import PREVIEW_COLORS, AccessoriesDialog
 from ui.widgets.pixel import PixelButton
 from tests.test_ui_flow import UITestCase, pump
 
@@ -199,6 +199,14 @@ class TestAccessoriesShop(UITestCase):
         dialog.on_item_clicked(find(VERTEX, DEFAULT))
         canvas, vertex = first_vertex()
         self.assertIsNotNone(vertex.label_item)
+
+    def test_shop_shows_each_vertex_icon_in_its_own_color(self):
+        self.assertEqual({name: PALETTE.index(color) for name, color in PREVIEW_COLORS.items()},
+                         {"heart": 0, "bow": 6, "pokeball": 0, "star": 2, "block": 2})
+        self.assertEqual((PALETTE_NAMES[0], PALETTE_NAMES[6], PALETTE_NAMES[2]),
+                         ("RED", "MAGENTA", "YELLOW"))
+        self.assertNotIn("ghost", PREVIEW_COLORS)
+        self.open_shop().grab()
 
     def test_guide_explains_accessories(self):
         text = HowToPlayDialog(self.menu).text.text()

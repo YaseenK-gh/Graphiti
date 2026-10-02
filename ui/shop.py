@@ -19,6 +19,9 @@ TAB_NAMES = {CURSOR: "CURSOR", VERTEX: "VERTEX"}
 KIND_WORDS = {CURSOR: "cursor", VERTEX: "vertex icon"}
 COLUMNS = 4
 PREVIEW_BOX = 72
+PREVIEW_COLOR = PALETTE[4]
+PREVIEW_COLORS = {"heart": PALETTE[0], "bow": PALETTE[6], "pokeball": PALETTE[0],
+                  "star": PALETTE[2], "block": PALETTE[2]}
 ARROW = ["#.......", "##......", "###.....", "####....", "#####...", "######..", "#######.",
          "########", "#####...", "##.##...", "#..##...", "....##..", "....##.."]
 
@@ -62,7 +65,8 @@ class AccessoryCard(QAbstractButton):
 
         centre_x = body.center().x()
         top = body.top() + 14
-        pixmap = preview_pixmap(self.item.kind, self.item.id, PREVIEW_BOX, PALETTE[4])
+        pixmap = preview_pixmap(self.item.kind, self.item.id, PREVIEW_BOX,
+                                PREVIEW_COLORS.get(self.item.id, PREVIEW_COLOR))
         if pixmap is not None:
             p.drawPixmap(centre_x - pixmap.width() // 2,
                          top + (PREVIEW_BOX - pixmap.height()) // 2, pixmap)
