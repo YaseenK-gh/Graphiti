@@ -70,3 +70,57 @@ class LeaderboardSystem:
     def get_top_by_difficulty(self, difficulty: str,
                               limit: int = constants.LEADERBOARD_TOP_N) -> List[LeaderboardEntry]:
         return [e for e in self.entries if e.difficulty == difficulty][:limit]
+
+
+@dataclass
+class PlanarEntry:
+    player_name: str
+    solved: int
+    area: float
+    box: int
+    timestamp: float
+
+
+class PlanarLeaderboard:
+    LEADERBOARD_FILE = "planar_leaderboard.json"
+    MAX_ENTRIES = constants.LEADERBOARD_MAX_ENTRIES
+
+    def __init__(self, path: Optional[str] = None):
+        self.path = path or os.path.join(constants.DATA_DIR, self.LEADERBOARD_FILE)
+        self.entries: List[PlanarEntry] = self.load()
+
+    def load(self) -> List[PlanarEntry]:
+        data = load_json(self.path, [])
+        entries = []
+        if isinstance(data, list):
+            for row in data:
+                try:
+                    entries.append(PlanarEntry(
+                        player_name=str(row["player_name"])[:constants.PLAYER_NAME_MAX_LEN],
+                        solved=int(row["solved"]), area=float(row["area"]), box=int(row["box"]),
+                        timestamp=float(row["timestamp"])))
+                except (KeyError, TypeError, ValueError):
+                    continue
+        self._sort_and_prune(entries)
+        return entries
+
+    def save(self) -> bool:
+        return save_json(self.path, [asdict(e) for e in self.entries])
+
+    def _sort_and_prune(self, entries: List[PlanarEntry]):
+        entries.sort(key=lambda e: (-e.solved, e.area, e.box, e.timestamp))
+        del entries[self.MAX_ENTRIES:]
+
+    def add_entry(self, player_name: str, solved: int, area: float, box: int) -> Optional[int]:
+        entry = PlanarEntry(player_name=player_name, solved=int(solved), area=float(area),
+                            box=int(box), timestamp=time.time())
+        self.entries.append(entry)
+        self._sort_and_prune(self.entries)
+        self.save()
+        for rank, e in enumerate(self.entries, 1):
+            if e is entry:
+                return rank
+        return None
+
+    def get_top(self, limit: int = constants.LEADERBOARD_TOP_N) -> List[PlanarEntry]:
+        return self.entries[:limit]

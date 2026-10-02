@@ -127,7 +127,8 @@ class PostDifficultyScreen(BaseScreen):
 
     def show_leaderboard(self):
         LeaderboardDialog(self.game_state.leaderboard_system, self,
-                          difficulty=self.game_state.last_difficulty_result.difficulty).exec()
+                          difficulty=self.game_state.last_difficulty_result.difficulty,
+                          planar=self.game_state.planar_leaderboard).exec()
 
     def on_menu_clicked(self):
         self.main_window.show_screen(GameScreen.MENU)

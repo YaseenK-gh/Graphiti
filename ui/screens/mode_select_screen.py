@@ -15,7 +15,7 @@ class ModeSelectScreen(BaseScreen):
     def init_ui(self):
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        panel = self.fit(make_panel(), 0.55, 640, 820)
+        panel = self.fit(make_panel(), 0.82, 980, 1140)
         layout = panel_layout(panel)
         layout.addWidget(make_label("SELECT GAME MODE", role="subtitle"))
 
@@ -27,8 +27,12 @@ class ModeSelectScreen(BaseScreen):
         self.free_card = PixelCard("FREE MODE", ["PRACTICE TRAINING", "ANY GRAPH | ANY SIZE",
                                                  "NO SCORING"])
         self.free_card.clicked.connect(self.on_free_clicked)
+        self.planar_card = PixelCard("PLANAR DRAWING", ["UNTANGLE THE GRAPH", "10 MINUTE RUN",
+                                                        "SMALLEST AREA WINS"])
+        self.planar_card.clicked.connect(self.on_planar_clicked)
         cards.addWidget(self.standard_card)
         cards.addWidget(self.free_card)
+        cards.addWidget(self.planar_card)
         layout.addLayout(cards)
 
         layout.addWidget(make_divider())
@@ -45,6 +49,9 @@ class ModeSelectScreen(BaseScreen):
     def on_free_clicked(self):
         self.game_state.start_free_mode()
         self.main_window.show_screen(GameScreen.FREE_GRAPH_SELECT)
+
+    def on_planar_clicked(self):
+        self.main_window.show_screen(GameScreen.PLANAR_INTRO)
 
     def on_back_clicked(self):
         self.main_window.show_screen(GameScreen.MENU)

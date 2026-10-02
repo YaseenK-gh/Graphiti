@@ -11,6 +11,9 @@ from ui.screens.free_complete_screen import FreeCompleteScreen
 from ui.screens.free_graph_select_screen import FreeGraphSelectScreen
 from ui.screens.menu_screen import MenuScreen
 from ui.screens.mode_select_screen import ModeSelectScreen
+from ui.screens.planar_intro_screen import PlanarIntroScreen
+from ui.screens.planar_results_screen import PlanarResultsScreen
+from ui.screens.planar_screen import PlanarScreen
 from ui.screens.playing_screen import PlayingScreen
 from ui.screens.post_difficulty_screen import PostDifficultyScreen
 from ui.screens.post_level_screen import PostLevelScreen
@@ -56,6 +59,9 @@ class MainWindow(QMainWindow):
             GameScreen.POST_LEVEL: PostLevelScreen(self),
             GameScreen.POST_DIFFICULTY: PostDifficultyScreen(self),
             GameScreen.FREE_COMPLETE: FreeCompleteScreen(self),
+            GameScreen.PLANAR_INTRO: PlanarIntroScreen(self),
+            GameScreen.PLANAR_PLAYING: PlanarScreen(self),
+            GameScreen.PLANAR_RESULTS: PlanarResultsScreen(self),
         }
         for screen in self.screens.values():
             self.stacked_widget.addWidget(screen)
@@ -78,3 +84,5 @@ class MainWindow(QMainWindow):
     def update_game(self):
         if self.game_state.current_screen == GameScreen.PLAYING:
             self.screens[GameScreen.PLAYING].update_timer_display()
+        elif self.game_state.current_screen == GameScreen.PLANAR_PLAYING:
+            self.screens[GameScreen.PLANAR_PLAYING].tick()

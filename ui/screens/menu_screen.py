@@ -69,7 +69,8 @@ class MenuScreen(BaseScreen):
         HowToPlayDialog(self).exec()
 
     def show_leaderboard(self):
-        LeaderboardDialog(self.game_state.leaderboard_system, self).exec()
+        LeaderboardDialog(self.game_state.leaderboard_system, self,
+                          planar=self.game_state.planar_leaderboard).exec()
 
     def show_achievements(self):
         AchievementsDialog(self.game_state.achievement_system, self).exec()

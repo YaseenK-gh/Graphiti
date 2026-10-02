@@ -9,13 +9,14 @@ from PySide6.QtWidgets import (QAbstractItemView, QButtonGroup, QGridLayout, QHB
 from core.achievements import BADGE_INFO, AchievementSystem
 from core.constants import (COLORBLIND_SOLVES, DIFFICULTY_CONFIG, DIFFICULTY_ORDER,
                             GRAPH_DISPLAY_NAMES, HINT_COSTS, LEADERBOARD_TOP_N,
-                            MAX_HINTS_PER_LEVEL, PALETTE, PALETTE_KEYS, PALETTE_NAMES, UI_BG,
+                            MAX_HINTS_PER_LEVEL, PALETTE, PALETTE_KEYS, PALETTE_NAMES,
+                            PLANAR_RUN_SECONDS, UI_BG,
                             UI_DANGER_TEXT, UI_GOLD, UI_INNER, UI_LIME)
 from core.leaderboard import LeaderboardSystem
+from core.planar_run import format_area
 from ui import fonts
 from ui.audio import track_name
 from ui.overlay import Overlay
-from ui.widgets.pixel import icon_pixmap
 from ui.widgets.pixel import icon_pixmap
 from ui.screens import make_button, make_divider, make_label, set_text_color
 from ui.styles import GAP, GAP_TIGHT, LINE_SPACING_CSS, SIZE_SUBTITLE, size_body
@@ -26,7 +27,7 @@ LEFT = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
 class PauseDialog(Overlay):
     RESUME, RESET, FORFEIT, QUIT = "resume", "reset", "forfeit", "quit"
 
-    def __init__(self, parent=None, standard_mode: bool = True):
+    def __init__(self, parent=None, standard_mode: bool = True, allow_forfeit: bool = True):
         super().__init__(parent, width_fraction=0.38, min_width=520, max_width=600)
         self.choice = self.RESUME
         layout = self.layout_
@@ -38,6 +39,8 @@ class PauseDialog(Overlay):
                                             (f"RESET LEVEL{penalty}", self.RESET, "light", None),
                                             ("FORFEIT & SHOW SOLUTION", self.FORFEIT, "danger", None),
                                             ("QUIT TO MENU", self.QUIT, "dark", "back")):
+            if choice == self.FORFEIT and not allow_forfeit:
+                continue
             layout.addWidget(make_button(text, lambda _=False, c=choice: self._choose(c),
                                          variant=variant, icon=icon))
 
@@ -111,6 +114,20 @@ def guide_html() -> str:
              f"refunded."),
         heading("FREE MODE"),
         para("Practice any of the 11 graph types at any size. No scoring; hints are free."),
+        heading("PLANAR DRAWING"),
+        para(f"A {PLANAR_RUN_SECONDS // 60}-minute run of tangled graphs on grid paper. "
+             f"{_hl('Hold and drag')} a vertex and it slides along the grid lines, one "
+             f"intersection at a time, never diagonally. The {_hl('arrow keys')} step the "
+             "selected vertex. A vertex cannot enter an intersection that is already taken."),
+        para(f"Crossing edges turn <span style=\"color:{UI_DANGER_TEXT}\">red</span>. An edge "
+             "that passes through another vertex, or lies on top of another edge, also counts "
+             f"as a crossing. When nothing crosses, press {_hl('Enter')} to submit the drawing "
+             f"and get the next graph. {_hl('R')} puts the graph back to its starting tangle. "
+             "There are no skips."),
+        para(f"Runs are ranked by {_hl('graphs solved')}, then by the smallest total "
+             f"{_hl('area')} (the grid squares enclosed by the drawing), then by the smallest "
+             f"total {_hl('box')} (the rectangle that holds the whole drawing). After the run "
+             "you see the smallest layout the program found for every graph next to your own."),
         heading("TITLES"),
         para(titles),
         heading("CREDITS"),
@@ -146,10 +163,13 @@ class HowToPlayDialog(Overlay):
 
 class LeaderboardDialog(Overlay):
     COLUMNS = ["#", "NAME", "SCORE", "GRAPHS", "DATE"]
+    PLANAR_COLUMNS = ["#", "NAME", "SOLVED", "AREA", "BOX", "DATE"]
+    PLANAR = "PLANAR"
     ROW_HEIGHT = 34
 
-    def __init__(self, leaderboard: LeaderboardSystem, parent=None, difficulty: str = None):
-        super().__init__(parent, width_fraction=0.56, min_width=680, max_width=860)
+    def __init__(self, leaderboard: LeaderboardSystem, parent=None, difficulty: str = None,
+                 planar=None):
+        super().__init__(parent, width_fraction=0.6, min_width=760, max_width=900)
         layout = self.layout_
         layout.addWidget(make_label(f"LEADERBOARD - TOP {LEADERBOARD_TOP_N}", role="title"))
 
@@ -159,29 +179,46 @@ class LeaderboardDialog(Overlay):
         self.tab_group.setExclusive(True)
         self.stack = QStackedWidget()
         self.tables = {}
-        for i, diff in enumerate(DIFFICULTY_ORDER):
-            tab = make_button(diff, variant="tab", small=True)
+        names = list(DIFFICULTY_ORDER) + ([self.PLANAR] if planar is not None else [])
+        for i, name in enumerate(names):
+            tab = make_button(name, variant="tab", small=True)
             tab.setCheckable(True)
             tab.clicked.connect(lambda _=False, index=i: self.stack.setCurrentIndex(index))
             self.tab_group.addButton(tab, i)
             tabs.addWidget(tab)
-            table = self._make_table(leaderboard, diff)
-            self.tables[diff] = table
+            if name == self.PLANAR:
+                table = self._make_table(self.PLANAR_COLUMNS, self._planar_rows(planar),
+                                         "NO RUNS YET - FINISH A PLANAR DRAWING RUN")
+            else:
+                table = self._make_table(self.COLUMNS, self._score_rows(leaderboard, name),
+                                         "NO SCORES YET - FINISH A RUN TO GET ON THE BOARD")
+            self.tables[name] = table
             self.stack.addWidget(table)
         layout.addLayout(tabs)
         self.stack.setFixedHeight(self.ROW_HEIGHT * (LEADERBOARD_TOP_N + 1) + 8)
         layout.addWidget(self.stack)
-        start = DIFFICULTY_ORDER.index(difficulty) if difficulty in DIFFICULTY_ORDER else 0
+        start = names.index(difficulty) if difficulty in names else 0
         self.tab_group.button(start).setChecked(True)
         self.stack.setCurrentIndex(start)
 
         layout.addWidget(make_divider(dark=True))
         layout.addWidget(make_button("CLOSE", self.accept, variant="dark", small=True, icon="close"))
 
-    def _make_table(self, leaderboard: LeaderboardSystem, difficulty: str) -> QTableWidget:
-        entries = leaderboard.get_top_by_difficulty(difficulty)
-        table = QTableWidget(max(1, len(entries)), len(self.COLUMNS))
-        table.setHorizontalHeaderLabels(self.COLUMNS)
+    @staticmethod
+    def _date(timestamp: float) -> str:
+        return datetime.datetime.fromtimestamp(timestamp).strftime("%y-%m-%d")
+
+    def _score_rows(self, leaderboard: LeaderboardSystem, difficulty: str):
+        return [(e.player_name, f"{e.score:,}", e.graph_count, self._date(e.timestamp))
+                for e in leaderboard.get_top_by_difficulty(difficulty)]
+
+    def _planar_rows(self, planar):
+        return [(e.player_name, e.solved, format_area(e.area), e.box, self._date(e.timestamp))
+                for e in planar.get_top()]
+
+    def _make_table(self, columns, rows, empty_text: str) -> QTableWidget:
+        table = QTableWidget(max(1, len(rows)), len(columns))
+        table.setHorizontalHeaderLabels(columns)
         table.verticalHeader().setVisible(False)
         table.verticalHeader().setDefaultSectionSize(self.ROW_HEIGHT)
         table.setShowGrid(False)
@@ -193,15 +230,12 @@ class LeaderboardDialog(Overlay):
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft)
-        if not entries:
-            table.setSpan(0, 0, 1, len(self.COLUMNS))
-            table.setItem(0, 0, self._cell("NO SCORES YET - FINISH A RUN TO GET ON THE BOARD",
-                                           UI_INNER))
+        if not rows:
+            table.setSpan(0, 0, 1, len(columns))
+            table.setItem(0, 0, self._cell(empty_text, UI_INNER))
             return table
-        for row, e in enumerate(entries):
-            date = datetime.datetime.fromtimestamp(e.timestamp).strftime("%y-%m-%d")
-            for col, value in enumerate((row + 1, e.player_name, f"{e.score:,}",
-                                         e.graph_count, date)):
+        for row, values in enumerate(rows):
+            for col, value in enumerate((row + 1,) + tuple(values)):
                 table.setItem(row, col, self._cell(str(value),
                                                    UI_GOLD if row == 0 and col == 0 else None))
         return table

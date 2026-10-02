@@ -6,7 +6,8 @@ from typing import Dict, List, Optional, Set, Tuple
 from core.achievements import AchievementSystem
 from core.constants import DIFFICULTY_CONFIG, GRAPH_CONSTRAINTS
 from core.hint_system import HintSystem
-from core.leaderboard import LeaderboardSystem
+from core.leaderboard import LeaderboardSystem, PlanarLeaderboard
+from core.planar_run import PlanarRun
 from core.scoring import ScoringSystem
 from core.validation import validate_player_name
 
@@ -14,6 +15,7 @@ from core.validation import validate_player_name
 class GameMode(Enum):
     STANDARD = "standard"
     FREE = "free"
+    PLANAR = "planar"
 
 
 class GameScreen(Enum):
@@ -26,6 +28,9 @@ class GameScreen(Enum):
     POST_LEVEL = "post_level"
     POST_DIFFICULTY = "post_difficulty"
     FREE_COMPLETE = "free_complete"
+    PLANAR_INTRO = "planar_intro"
+    PLANAR_PLAYING = "planar_playing"
+    PLANAR_RESULTS = "planar_results"
 
 
 @dataclass
@@ -111,6 +116,8 @@ class GameState:
 
     achievement_system: AchievementSystem = field(default_factory=AchievementSystem.load)
     leaderboard_system: LeaderboardSystem = field(default_factory=LeaderboardSystem)
+    planar_leaderboard: PlanarLeaderboard = field(default_factory=PlanarLeaderboard)
+    planar_run: Optional[PlanarRun] = None
     pending_badges: List[str] = field(default_factory=list)
 
     last_level_score: Optional[int] = None
@@ -130,6 +137,29 @@ class GameState:
         self.game_mode = GameMode.FREE
         self.difficulty = None
         self.current_graph = None
+
+    def start_planar_run(self, run: Optional[PlanarRun] = None) -> PlanarRun:
+        self.game_mode = GameMode.PLANAR
+        self.difficulty = None
+        self.current_graph = None
+        self.planar_run = run or PlanarRun()
+        self.planar_run.start()
+        return self.planar_run
+
+    def submit_planar_score(self, player_name: str) -> Tuple[Optional[int], Optional[str]]:
+        run = self.planar_run
+        if run is None or not run.time_up():
+            return None, "No finished run to submit."
+        if run.submitted:
+            return None, "Score already submitted."
+        if run.solved == 0:
+            return None, "Solve at least one graph to get on the board."
+        name, error = validate_player_name(player_name)
+        if error:
+            return None, error
+        run.rank = self.planar_leaderboard.add_entry(name, run.solved, run.total_area, run.total_box)
+        run.submitted = True
+        return run.rank, None
 
     def reset_for_new_difficulty(self):
         self.level_scores = []
