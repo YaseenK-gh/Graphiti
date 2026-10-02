@@ -11,6 +11,7 @@ from core.constants import (CONFLICT_EDGE_STROKE, DEFAULT_EDGE_STROKE, DEFAULT_N
                             DEFAULT_NODE_STROKE, EDGE_CONFLICT_STROKE_WIDTH, EDGE_STROKE_WIDTH,
                             NODE_STROKE_WIDTH, UI_BORDER, UI_DOT, UI_FIELD, UI_INNER, UI_LIME,
                             UI_PANEL)
+from ui.accessories import draw_vertex_icon
 from ui.fonts import body_font
 from ui.styles import SIZE_BODY
 from ui.widgets.pixel import dot_tile
@@ -21,7 +22,9 @@ STEPS = {Qt.Key.Key_Left: (-1, 0), Qt.Key.Key_Right: (1, 0),
 
 
 def draw_vertex(painter: QPainter, centre: QPointF, radius: float, fill: str,
-                stroke_width: float = NODE_STROKE_WIDTH):
+                stroke_width: float = NODE_STROKE_WIDTH, plain: bool = False):
+    if not plain and draw_vertex_icon(painter, centre, radius, fill):
+        return
     painter.setPen(QPen(QColor(DEFAULT_NODE_STROKE), stroke_width))
     painter.setBrush(QColor(fill))
     painter.drawEllipse(centre, radius, radius)

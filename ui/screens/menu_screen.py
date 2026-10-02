@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QApplication, QHBoxLayout, QVBoxLayout
 from core.game_state import GameScreen
 from ui.dialogs import AchievementsDialog, HowToPlayDialog, LeaderboardDialog, VolumeDialog
 from ui.screens import BaseScreen, make_button, make_label, make_panel, panel_layout
+from ui.shop import AccessoriesDialog
 from ui.styles import GAP, GAP_SECTION, GAP_TIGHT, SIZE_DISPLAY
 from ui.widgets.pixel import PixelIconButton, PixelTitle
 
@@ -28,6 +29,8 @@ class MenuScreen(BaseScreen):
         layout = panel_layout(panel)
         self.play_btn = make_button("PLAY", self.on_play_clicked, icon="play")
         layout.addWidget(self.play_btn)
+        self.accessories_btn = make_button("ACCESSORIES", self.show_accessories, icon="gem")
+        layout.addWidget(self.accessories_btn)
         layout.addWidget(make_button("LEADERBOARD", self.show_leaderboard, icon="star"))
         layout.addWidget(make_button("QUIT", QApplication.quit, icon="close"))
         layout.addSpacing(GAP_TIGHT)
@@ -51,12 +54,15 @@ class MenuScreen(BaseScreen):
         outer.addLayout(corners)
 
     def on_show(self):
-        achievements = self.game_state.achievement_system
-        self.banked_label.setText(f"BANKED: {self.game_state.total_banked:,} | "
-                                  f"BADGES: {len(achievements.badges_earned)} | "
-                                  f"SOLVED: {achievements.graphs_solved}")
+        self.update_stats()
         self.update_volume_icon()
         self.play_btn.setFocus()
+
+    def update_stats(self):
+        achievements = self.game_state.achievement_system
+        self.banked_label.setText(f"BANKED: {self.game_state.wallet.balance:,} | "
+                                  f"BADGES: {len(achievements.badges_earned)} | "
+                                  f"SOLVED: {achievements.graphs_solved}")
 
     def update_volume_icon(self):
         settings = self.main_window.settings
@@ -71,6 +77,9 @@ class MenuScreen(BaseScreen):
     def show_leaderboard(self):
         LeaderboardDialog(self.game_state.leaderboard_system, self,
                           planar=self.game_state.planar_leaderboard).exec()
+
+    def show_accessories(self):
+        AccessoriesDialog(self.game_state.wallet, self, on_change=self.update_stats).exec()
 
     def show_achievements(self):
         AchievementsDialog(self.game_state.achievement_system, self).exec()

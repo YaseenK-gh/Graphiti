@@ -128,6 +128,13 @@ def guide_html() -> str:
              f"{_hl('area')} (the grid squares enclosed by the drawing), then by the smallest "
              f"total {_hl('box')} (the rectangle that holds the whole drawing). After the run "
              "you see the smallest layout the program found for every graph next to your own."),
+        heading("ACCESSORIES"),
+        para(f"Every STANDARD difficulty you finish adds its banked score to your "
+             f"{_hl('balance')}, which is saved between sessions. Spend it in ACCESSORIES on the "
+             f"home menu: a custom {_hl('cursor')} or a {_hl('vertex icon')} that replaces the "
+             "round vertices and takes on their color. Click an item to buy it, and click one "
+             "you own to equip it. Free mode, planar drawing and hints do not change the "
+             "balance."),
         heading("TITLES"),
         para(titles),
         heading("CREDITS"),

@@ -86,7 +86,7 @@ class PostDifficultyScreen(BaseScreen):
         self.banked_label.setText(f"BANKED: {result.banked_score:,}")
         self.stats_label.setText(f"RESETS: {result.resets} | HINTS: {result.hints_used} | "
                                  f"FORFEITS: {result.forfeits} | "
-                                 f"SESSION: {state.total_banked:,}")
+                                 f"BALANCE: {state.wallet.balance:,}")
         self.show_achievements()
 
         nxt = state.next_difficulty(result.difficulty)

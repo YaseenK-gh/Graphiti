@@ -1,7 +1,7 @@
 from typing import Optional
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QBrush, QColor, QPen
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import QBrush, QColor, QPainterPath, QPen
 from PySide6.QtWidgets import (QGraphicsDropShadowEffect, QGraphicsEllipseItem, QGraphicsLineItem,
                                QGraphicsRectItem, QGraphicsSimpleTextItem)
 
@@ -10,6 +10,7 @@ from core.constants import (CONFLICT_EDGE_STROKE, DEFAULT_EDGE_STROKE, DEFAULT_N
                             DEFAULT_NODE_STROKE, EDGE_CONFLICT_STROKE_WIDTH, EDGE_STROKE_WIDTH,
                             HINT_HALO_COLOR, HOVER_GLOW_BLUR, HOVER_GLOW_COLOR, NODE_STROKE_WIDTH,
                             PALETTE, UI_PANEL)
+from ui import accessories
 from ui.fonts import body_font, pixel_font
 from ui.widgets.color_palette import text_color_for
 
@@ -48,8 +49,30 @@ class VertexItem(QGraphicsEllipseItem):
         self.setAcceptHoverEvents(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         font_px = max(10, round(radius * (1.45 if len(label) < 2 else 1.1)))
+        plain = accessories.vertex_icon_bounds(radius) is None
         self.label_item = _centered_text(self, label, body_font(font_px, crisp=False),
-                                         text_color_for(DEFAULT_NODE_FILL)) if label else None
+                                         text_color_for(DEFAULT_NODE_FILL)) if label and plain else None
+
+    def icon_rect(self) -> Optional[QRectF]:
+        size = accessories.vertex_icon_bounds(self.radius)
+        if size is None:
+            return None
+        return QRectF(-size[0] / 2, -size[1] / 2, size[0], size[1])
+
+    def boundingRect(self) -> QRectF:
+        rect, icon = super().boundingRect(), self.icon_rect()
+        return rect if icon is None else rect.united(icon)
+
+    def shape(self) -> QPainterPath:
+        path, size = super().shape(), accessories.vertex_icon_size(self.radius)
+        if size is not None:
+            path.addRect(QRectF(-size[0] / 2, -size[1] / 2, size[0], size[1]))
+        return path
+
+    def paint(self, painter, option, widget=None):
+        if not accessories.draw_vertex_icon(painter, QPointF(0, 0), self.radius,
+                                            self.brush().color().name()):
+            super().paint(painter, option, widget)
 
     def set_color(self, color_index: Optional[int]):
         self.color_index = color_index

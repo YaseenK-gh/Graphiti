@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QApplication, QMainWindow, QStackedWidget, QVBoxLa
 
 from core.game_state import GameScreen, GameState
 from core.settings import Settings
+from ui.accessories import apply_wallet
 from ui.fonts import app_font, load_fonts
 from ui.screens.difficulty_select_screen import DifficultySelectScreen
 from ui.screens.free_complete_screen import FreeCompleteScreen
@@ -33,6 +34,7 @@ class MainWindow(QMainWindow):
         QApplication.instance().setFont(app_font())
         self.game_state = game_state or GameState()
         self.settings = Settings.load()
+        apply_wallet(self.game_state.wallet)
         self.music = None
         if not os.environ.get("GRAPH_COLORING_NO_AUDIO"):
             from ui.audio import MusicPlayer

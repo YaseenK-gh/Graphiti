@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
 
+from core.accessories import Wallet
 from core.achievements import AchievementSystem
 from core.constants import DIFFICULTY_CONFIG, GRAPH_CONSTRAINTS
 from core.hint_system import HintSystem
@@ -118,6 +119,7 @@ class GameState:
     leaderboard_system: LeaderboardSystem = field(default_factory=LeaderboardSystem)
     planar_leaderboard: PlanarLeaderboard = field(default_factory=PlanarLeaderboard)
     planar_run: Optional[PlanarRun] = None
+    wallet: Wallet = field(default_factory=Wallet)
     pending_badges: List[str] = field(default_factory=list)
 
     last_level_score: Optional[int] = None
@@ -344,6 +346,7 @@ class GameState:
         all_max = graph_count > 0 and self.max_time_bonus_hits == graph_count
         banked = ScoringSystem.apply_500_percent_bonus(self.provisional_score, all_max)
         self.total_banked += banked
+        self.wallet.add(banked)
         result = DifficultyResult(
             difficulty=self.difficulty, provisional_score=self.provisional_score,
             banked_score=banked, all_max_time=all_max, resets=self.resets,
