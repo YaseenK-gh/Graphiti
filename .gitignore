@@ -6,3 +6,8 @@ data/
 
 # Mojangles is Mojang's font and not redistributable; kept out of the repository.
 assets/fonts/mojangles-regular.ttf
+
+# Build output and the private build environment
+build/
+dist/
+.build-venv/

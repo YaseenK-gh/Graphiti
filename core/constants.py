@@ -1,7 +1,19 @@
 import os
+import sys
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.environ.get("GRAPH_COLORING_DATA_DIR") or os.path.join(PROJECT_ROOT, "data")
+FROZEN = bool(getattr(sys, "frozen", False))
+
+
+def default_data_dir(frozen: bool = FROZEN) -> str:
+    if frozen:
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        return os.path.join(base, "Graphiti")
+    return os.path.join(PROJECT_ROOT, "data")
+
+
+DATA_DIR = os.environ.get("GRAPH_COLORING_DATA_DIR") or default_data_dir()
+ICON_PATH = os.path.join(PROJECT_ROOT, "assets", "icon", "graphiti.png")
 
 UI_BG = "#C8D4A0"
 UI_DOT = "#8A9A60"
