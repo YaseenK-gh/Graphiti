@@ -195,10 +195,11 @@ class RaceScreen(BaseScreen):
         return panel
 
     def init_shortcuts(self):
-        def bind(sequence: str, slot):
+        def bind(sequence: str, slot) -> QShortcut:
             shortcut = QShortcut(QKeySequence(sequence), self)
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(slot)
+            return shortcut
 
         for index, key in enumerate(PALETTE_KEYS):
             bind(key, lambda i=index: self.on_color_selected(i))
@@ -206,7 +207,7 @@ class RaceScreen(BaseScreen):
         bind("Escape", self.on_leave_clicked)
         bind("Return", self.on_enter)
         bind("Enter", self.on_enter)
-        bind("S", self.on_skip_key)
+        self.skip_shortcut = bind("S", self.on_skip_key)
 
     def on_show(self):
         session = self.session
@@ -217,10 +218,11 @@ class RaceScreen(BaseScreen):
         coloring = self.is_coloring()
         self.boards.setCurrentWidget(self.canvas if coloring else self.paper)
         self.palette_box.setVisible(coloring)
+        self.skip_shortcut.setEnabled(coloring)
         self.mode_label.setText(f"MULTIPLAYER | {RACE_MODE_NAMES.get(session.mode, '')}")
         self.legend_label.setText("CONFLICT" if coloring else "CROSSING")
         self.help_label.setText("RIGHT-CLICK: ERASE | S: SKIP" if coloring
-                                else "DRAG ALONG THE LINES | ARROWS: STEP")
+                                else "DRAG OR ARROWS: MOVE | WASD: SWITCH")
         self.header_label.setText("GET READY")
         self.badge.setText("")
         self.graph_label.setText("")

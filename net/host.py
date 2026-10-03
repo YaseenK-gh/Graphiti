@@ -7,8 +7,8 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtNetwork import QHostAddress, QTcpServer, QTcpSocket
 
 from core.constants import (PLANAR_SEARCH_SECONDS, PLANAR_SEARCH_SLICE_SECONDS,
-                            RACE_COUNTDOWN_SECONDS, RACE_MAX_PLAYERS, RACE_MIN_PLAYERS,
-                            RACE_PLANAR)
+                            RACE_COUNTDOWN_SECONDS, RACE_MAX_MINUTES, RACE_MAX_PLAYERS,
+                            RACE_MIN_MINUTES, RACE_MIN_PLAYERS, RACE_PLANAR, RACE_SECONDS)
 from core.race import Race
 from core.validation import validate_player_name
 from net.discovery import LobbyAnnouncer
@@ -46,6 +46,7 @@ class LobbyHost(QObject):
         self.wanted_port = port
         self.countdown_seconds = countdown_seconds
         self.duration = duration
+        self.minutes = RACE_SECONDS[mode] // 60
         self.search_seconds = search_seconds
         self.code = make_code(self.rng)
         self.host_key = secrets.token_hex(8)
@@ -86,11 +87,11 @@ class LobbyHost(QObject):
     def describe(self) -> dict:
         count = len(self.players())
         return {"id": self.lobby_id, "name": self.host_name, "mode": self.mode, "players": count,
-                "max": RACE_MAX_PLAYERS, "port": self.port,
+                "max": RACE_MAX_PLAYERS, "port": self.port, "minutes": self.minutes,
                 "open": self.state == LOBBY and count < RACE_MAX_PLAYERS and not self._closed}
 
     def _lobby_message(self) -> dict:
-        return {"t": "lobby", "state": self.state, "mode": self.mode,
+        return {"t": "lobby", "state": self.state, "mode": self.mode, "minutes": self.minutes,
                 "min": RACE_MIN_PLAYERS, "max": RACE_MAX_PLAYERS,
                 "players": [{"id": p.id, "name": p.name, "host": p.is_host}
                             for p in self.players()]}
@@ -127,6 +128,8 @@ class LobbyHost(QObject):
                 continue
             if kind == "start":
                 self._start(peer)
+            elif kind == "length":
+                self._length(peer, message)
             elif kind == "submit":
                 self._submit(peer, message)
             elif kind == "skip":
@@ -168,6 +171,15 @@ class LobbyHost(QObject):
                    "host": is_host, "code": self.code if is_host else None})
         self._broadcast_lobby()
 
+    def _length(self, peer: Peer, message: dict):
+        if not peer.is_host or self.state != LOBBY:
+            return
+        minutes = message.get("minutes")
+        if not isinstance(minutes, int) or isinstance(minutes, bool):
+            return
+        self.minutes = max(RACE_MIN_MINUTES, min(RACE_MAX_MINUTES, minutes))
+        self._broadcast_lobby()
+
     def _start(self, peer: Peer):
         if not peer.is_host or self.state != LOBBY:
             return
@@ -183,7 +195,8 @@ class LobbyHost(QObject):
         if self.state != COUNTDOWN:
             return
         self.race = Race(self.mode, {p.id: p.name for p in self.players()}, rng=self.rng,
-                         duration=self.duration, search_seconds=self.search_seconds)
+                         duration=self.duration if self.duration is not None
+                         else self.minutes * 60, search_seconds=self.search_seconds)
         self.race.start()
         self.state = PLAYING
         self._ticks = 0

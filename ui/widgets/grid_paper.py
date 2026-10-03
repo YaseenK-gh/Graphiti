@@ -19,6 +19,8 @@ from ui.widgets.pixel import dot_tile
 MARGIN = 36
 STEPS = {Qt.Key.Key_Left: (-1, 0), Qt.Key.Key_Right: (1, 0),
          Qt.Key.Key_Up: (0, -1), Qt.Key.Key_Down: (0, 1)}
+PICKS = {Qt.Key.Key_A: (-1, 0), Qt.Key.Key_D: (1, 0),
+         Qt.Key.Key_W: (0, -1), Qt.Key.Key_S: (0, 1)}
 
 
 def draw_vertex(painter: QPainter, centre: QPointF, radius: float, fill: str,
@@ -118,6 +120,30 @@ class GridPaper(QWidget):
             self.refresh()
         return moved
 
+    def pick_towards(self, direction: Tuple[int, int]) -> bool:
+        if self.puzzle is None or self.locked or not self.pos:
+            return False
+        if self.selected is None:
+            self.selected = min(range(len(self.pos)), key=lambda v: (self.pos[v][1], self.pos[v][0]))
+            self.update()
+            return True
+        x0, y0 = self.pos[self.selected]
+        dx, dy = direction
+        best = None
+        for v, (x, y) in enumerate(self.pos):
+            ahead = (x - x0) * dx + (y - y0) * dy
+            if v == self.selected or ahead <= 0:
+                continue
+            side = abs((x - x0) * dy) + abs((y - y0) * dx)
+            key = (ahead + 2 * side, side, ahead, v)
+            if best is None or key < best:
+                best = key
+        if best is None:
+            return False
+        self.selected = best[-1]
+        self.update()
+        return True
+
     def mousePressEvent(self, event):
         if self.locked or self.puzzle is None or event.button() != Qt.MouseButton.LeftButton:
             return
@@ -140,6 +166,10 @@ class GridPaper(QWidget):
         self.dragging = False
 
     def keyPressEvent(self, event):
+        pick = PICKS.get(event.key())
+        if pick is not None and event.modifiers() == Qt.KeyboardModifier.NoModifier:
+            self.pick_towards(pick)
+            return
         step = STEPS.get(event.key())
         if step is None or self.selected is None or self.locked or self.puzzle is None:
             super().keyPressEvent(event)

@@ -22,8 +22,9 @@ from ui.widgets.pixel import PixelCard, draw_block
 LEFT = Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
 
 
-def mode_text(mode: str) -> str:
-    return f"{RACE_MODE_NAMES.get(mode, mode.upper())} | {RACE_SECONDS.get(mode, 0) // 60} MIN"
+def mode_text(mode: str, minutes: int = 0) -> str:
+    minutes = minutes or RACE_SECONDS.get(mode, 0) // 60
+    return f"{RACE_MODE_NAMES.get(mode, mode.upper())} | {minutes} MIN"
 
 
 class LobbyRow(QAbstractButton):
@@ -55,7 +56,8 @@ class LobbyRow(QAbstractButton):
         p.setPen(QColor(UI_LIME_DIM if dark else UI_BORDER))
         p.drawText(QRect(inner.left(), inner.top() + SIZE_SUBTITLE + 10, inner.width(),
                          SIZE_BODY + 6), LEFT,
-                   f"{mode_text(self.info['mode'])} | {self.info['players']}/{self.info['max']}")
+                   f"{mode_text(self.info['mode'], self.info.get('minutes', 0))} | "
+                   f"{self.info['players']}/{self.info['max']}")
 
 
 class AddressOverlay(Overlay):
@@ -147,8 +149,8 @@ class MultiplayerScreen(BaseScreen):
         self.mode_group = QButtonGroup(self)
         self.mode_group.setExclusive(True)
         self.mode_cards = {}
-        for mode, lines in ((RACE_COLORING, ["7 MINUTES", "MOST GRAPHS COLORED WINS"]),
-                            (RACE_PLANAR, ["10 MINUTES", "MOST GRAPHS UNTANGLED WINS"])):
+        for mode, lines in ((RACE_COLORING, ["MOST GRAPHS COLORED WINS", "YOU SET THE LENGTH"]),
+                            (RACE_PLANAR, ["MOST GRAPHS UNTANGLED WINS", "YOU SET THE LENGTH"])):
             card = PixelCard(RACE_MODE_NAMES[mode], lines)
             card.setCheckable(True)
             self.mode_group.addButton(card)

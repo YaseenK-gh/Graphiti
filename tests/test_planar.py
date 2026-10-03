@@ -188,6 +188,28 @@ class TestPlanarFlow(UITestCase):
         for before, after in Trail.moves:
             self.assertEqual(abs(before[0] - after[0]) + abs(before[1] - after[1]), 1)
 
+    def test_wasd_switches_vertex_without_moving_anything(self):
+        run, screen = self.start()
+        paper = screen.paper
+        n = run.current.puzzle.n
+        layout = [(5, 4), (8, 4), (2, 4), (5, 1), (5, 7), (9, 7)] + [(11, i) for i in range(n - 6)]
+        paper.set_positions(layout[:n])
+        before = list(paper.pos)
+        paper.selected = None
+        QTest.keyClick(paper, Qt.Key.Key_D)
+        self.assertEqual(paper.selected, 3)
+        paper.selected = 0
+        for key, expected in ((Qt.Key.Key_D, 1), (Qt.Key.Key_A, 0), (Qt.Key.Key_A, 2),
+                              (Qt.Key.Key_D, 0), (Qt.Key.Key_W, 3), (Qt.Key.Key_S, 0),
+                              (Qt.Key.Key_S, 4)):
+            QTest.keyClick(paper, key)
+            self.assertEqual(paper.selected, expected)
+        QTest.keyClick(paper, Qt.Key.Key_S)
+        self.assertEqual(paper.selected, 4)
+        self.assertEqual(paper.pos, before)
+        QTest.keyClick(paper, Qt.Key.Key_Right)
+        self.assertEqual(paper.pos[4], (6, 7))
+
     def test_submit_only_when_planar_then_next_graph(self):
         run, screen = self.start()
         self.assertFalse(screen.submit_btn.isEnabled())

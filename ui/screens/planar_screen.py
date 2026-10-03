@@ -63,7 +63,7 @@ class PlanarScreen(BaseScreen):
         footer.addWidget(swatch, alignment=Qt.AlignmentFlag.AlignVCenter)
         footer.addWidget(make_label("CROSSING", role="caption", align=LEFT))
         footer.addStretch()
-        footer.addWidget(make_label("DRAG ALONG THE LINES | ARROWS: STEP", role="caption",
+        footer.addWidget(make_label("DRAG OR ARROWS: MOVE | WASD: SWITCH", role="caption",
                                     align=RIGHT))
         layout.addLayout(footer)
         return panel

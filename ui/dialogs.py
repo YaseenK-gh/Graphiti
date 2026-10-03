@@ -11,7 +11,8 @@ from core.constants import (COLORBLIND_SOLVES, DIFFICULTY_CONFIG, DIFFICULTY_ORD
                             GRAPH_DISPLAY_NAMES, HINT_COSTS, LEADERBOARD_TOP_N,
                             MAX_HINTS_PER_LEVEL, PALETTE, PALETTE_KEYS, PALETTE_NAMES,
                             PLANAR_RUN_SECONDS, RACE_COLORING, RACE_COUNTDOWN_SECONDS,
-                            RACE_DISQUALIFY_BELOW, RACE_MAX_PLAYERS, RACE_SECONDS, UI_BG,
+                            RACE_DISQUALIFY_BELOW, RACE_MAX_MINUTES, RACE_MAX_PLAYERS,
+                            RACE_MIN_MINUTES, RACE_PLANAR, RACE_SECONDS, UI_BG,
                             UI_DANGER_TEXT, UI_GOLD, UI_INNER, UI_LIME)
 from core.leaderboard import LeaderboardSystem
 from core.planar_run import format_area
@@ -119,7 +120,9 @@ def guide_html() -> str:
         para(f"A {PLANAR_RUN_SECONDS // 60}-minute run of tangled graphs on grid paper. "
              f"{_hl('Hold and drag')} a vertex and it slides along the grid lines, one "
              f"intersection at a time, never diagonally. The {_hl('arrow keys')} step the "
-             "selected vertex. A vertex cannot enter an intersection that is already taken."),
+             f"selected vertex, and {_hl('W A S D')} switch to the nearest vertex above, left, "
+             "below or right without moving anything. A vertex cannot enter an intersection "
+             "that is already taken."),
         para(f"Crossing edges turn <span style=\"color:{UI_DANGER_TEXT}\">red</span>. An edge "
              "that passes through another vertex, or lies on top of another edge, also counts "
              f"as a crossing. When nothing crosses, press {_hl('Enter')} to submit the drawing "
@@ -133,14 +136,16 @@ def guide_html() -> str:
         para(f"For up to {RACE_MAX_PLAYERS} players on the same network. One player creates a "
              f"lobby and tells the others its {_hl('code')}; they pick the lobby from the list "
              f"and type the code. If the list stays empty, use {_hl('JOIN BY ADDRESS')} with the "
-             "address shown on the host's lobby screen. The host starts the match once two "
-             f"players are in, after a {RACE_COUNTDOWN_SECONDS}-second countdown."),
-        para(f"{_hl('COLORING RACE')} ({RACE_SECONDS[RACE_COLORING] // 60} minutes): everyone "
-             "gets the same graphs in the same order. Color one and the next appears. Score = "
+             "address shown on the host's lobby screen. The host sets the "
+             f"{_hl('match length')} ({RACE_MIN_MINUTES} to {RACE_MAX_MINUTES} minutes; "
+             f"{RACE_SECONDS[RACE_COLORING] // 60} for a coloring race and "
+             f"{RACE_SECONDS[RACE_PLANAR] // 60} for planar drawing unless changed) and starts "
+             f"the match once two players are in, after a {RACE_COUNTDOWN_SECONDS}-second "
+             "countdown."),
+        para(f"{_hl('COLORING RACE')}: everyone gets the same graphs in the same order. Color one and the next appears. Score = "
              f"graphs solved minus skip penalties. {_hl('S')} skips a graph: the first skip costs "
              "1, the second 2, the third 3 and so on. No hints."),
-        para(f"{_hl('PLANAR DRAWING')} ({PLANAR_RUN_SECONDS // 60} minutes): the same rules as "
-             "the solo run, with no skips. Ranked by graphs solved, then smallest area, then "
+        para(f"{_hl('PLANAR DRAWING')}: the same rules as the solo run, with no skips. Ranked by graphs solved, then smallest area, then "
              "smallest box."),
         para(f"A player who solves nothing is {_hl('disqualified')}, and so is anyone whose "
              f"score drops below {RACE_DISQUALIFY_BELOW}. If the host leaves, the match ends "

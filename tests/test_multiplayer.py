@@ -4,6 +4,9 @@ import random
 import time
 import unittest
 
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
+
 from core.constants import RACE_COLORING, RACE_PLANAR
 from core.game_state import GameScreen
 from net.client import LobbyClient
@@ -133,6 +136,35 @@ class TestLobby(NetCase):
         late = self.join("late")
         self.assertEqual(late.events, [("rejected", "THAT MATCH HAS ALREADY STARTED")])
 
+    def test_host_sets_the_match_length(self):
+        host = self.open_host(duration=None)
+        self.assertEqual(host.minutes, 7)
+        self.assertEqual(host.describe()["minutes"], 7)
+        me = self.join("yaseen", code="", host_key=host.host_key)
+        ann = self.join("ann")
+        self.assertTrue(wait_until(lambda: ann.minutes == 7))
+        ann.set_minutes(2)
+        pump(60)
+        self.assertEqual(host.minutes, 7)
+        me.set_minutes(3)
+        self.assertTrue(wait_until(lambda: ann.minutes == 3 and me.minutes == 3))
+        me.set_minutes(500)
+        self.assertTrue(wait_until(lambda: host.minutes == 30))
+        me.set_minutes(0)
+        self.assertTrue(wait_until(lambda: host.minutes == 1))
+        self.assertEqual(host.describe()["minutes"], 1)
+        me.start()
+        self.assertTrue(wait_until(lambda: host.state == PLAYING and ann.duration))
+        self.assertEqual(ann.duration, 60)
+        self.assertGreater(ann.remaining(), 50)
+        me.set_minutes(5)
+        pump(60)
+        self.assertEqual(host.minutes, 1)
+
+    def test_planar_lobbies_default_to_ten_minutes(self):
+        host = self.open_host(RACE_PLANAR, duration=None)
+        self.assertEqual(host.minutes, 10)
+
     def test_countdown_is_cancelled_if_a_player_leaves(self):
         self.host = LobbyHost("YASEEN", RACE_COLORING, port=0, announce=False,
                               countdown_seconds=5)
@@ -243,6 +275,10 @@ class TestDiscovery(unittest.TestCase):
         self.assertTrue(wait_until(lambda: browser.lobbies()))
         found = browser.lobbies()[0]
         self.assertEqual((found["name"], found["mode"], found["port"]), ("YASEEN", "coloring", 47801))
+        self.assertEqual(found["minutes"], 0)
+        info["minutes"] = 12
+        announcer.announce()
+        self.assertTrue(wait_until(lambda: browser.lobbies()[0]["minutes"] == 12))
         self.assertTrue(found["address"])
         info["open"] = False
         announcer.announce()
@@ -346,6 +382,54 @@ class TestMultiplayerScreens(UITestCase):
         self.assertEqual(lobby.count_label.text(), "PLAYERS 2/20")
         self.assertEqual([label.text() for label in lobby.player_labels],
                          ["1. YASEEN  (HOST, YOU)", "2. ANN"])
+
+    def test_host_changes_the_length_from_the_lobby(self):
+        self.window.multiplayer.host_options.pop("duration")
+        controller = self.create(RACE_PLANAR)
+        lobby = self.screen(GameScreen.LOBBY)
+        self.assertEqual(lobby.length_label.text(), "10 MIN")
+        self.assertIn("10 MIN", lobby.mode_label.text())
+        lobby.longer_btn.click()
+        self.assertTrue(wait_until(lambda: lobby.length_label.text() == "11 MIN"))
+        for _ in range(3):
+            lobby.shorter_btn.click()
+            pump(30)
+        self.assertTrue(wait_until(lambda: controller.host.minutes == 8))
+        guest = self.guest()
+        self.assertTrue(wait_until(lambda: guest.minutes == 8))
+        lobby.start_btn.click()
+        self.assertTrue(wait_until(lambda: self.state.current_screen == GameScreen.RACE))
+        self.assertEqual(controller.session.duration, 480)
+
+    def test_guests_see_the_length_but_cannot_change_it(self):
+        controller = self.create()
+        other = self.MainWindow(self.state.__class__(
+            achievement_system=self.state.achievement_system,
+            leaderboard_system=self.state.leaderboard_system))
+        other.show()
+        try:
+            other.multiplayer.join_lobby("127.0.0.1", controller.host.port, "ann",
+                                         controller.host.code)
+            self.assertTrue(wait_until(lambda: other.game_state.current_screen == GameScreen.LOBBY))
+            lobby = other.screens[GameScreen.LOBBY]
+            self.assertTrue(lobby.longer_btn.isHidden() and lobby.shorter_btn.isHidden())
+            self.assertEqual(lobby.length_label.text(), "7 MIN")
+            controller.session.set_minutes(4)
+            self.assertTrue(wait_until(lambda: lobby.length_label.text() == "4 MIN"))
+        finally:
+            other.multiplayer.leave()
+            other.close()
+            other.deleteLater()
+            pump(20)
+
+    def test_s_selects_a_vertex_in_a_planar_race_instead_of_skipping(self):
+        controller, screen, ann = self.race(RACE_PLANAR)
+        self.assertFalse(screen.skip_shortcut.isEnabled())
+        screen.paper.setFocus()
+        screen.paper.selected = None
+        QTest.keyClick(screen.paper, Qt.Key.Key_S)
+        self.assertIsNotNone(screen.paper.selected)
+        self.assertEqual(screen.my_row()["skips"], 0)
 
     def test_coloring_race_solving_loads_the_next_graph(self):
         controller, screen, ann = self.race()

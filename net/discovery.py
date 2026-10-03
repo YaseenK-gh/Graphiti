@@ -109,7 +109,7 @@ class LobbyBrowser(QObject):
                 entry = {"id": str(info["id"]), "name": str(info["name"])[:24],
                          "mode": str(info["mode"]), "players": int(info["players"]),
                          "max": int(info["max"]), "port": int(info["port"]),
-                         "open": bool(info["open"])}
+                         "open": bool(info["open"]), "minutes": int(info.get("minutes", 0))}
             except (KeyError, TypeError, ValueError):
                 continue
             address = datagram.senderAddress().toString()
@@ -118,7 +118,8 @@ class LobbyBrowser(QObject):
             previous = self.found.get(entry["id"])
             self.found[entry["id"]] = entry
             if previous is None or any(previous[k] != entry[k]
-                                       for k in ("name", "mode", "players", "open", "port")):
+                                       for k in ("name", "mode", "players", "open", "port",
+                                                 "minutes")):
                 updated = True
         if updated:
             self.changed.emit()

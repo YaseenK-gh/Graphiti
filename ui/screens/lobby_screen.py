@@ -4,7 +4,8 @@ import time
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QHBoxLayout, QScrollArea, QVBoxLayout, QWidget
 
-from core.constants import UI_BAD_ON_LIGHT, UI_GOOD_ON_LIGHT, UI_MUTED_ON_LIGHT
+from core.constants import (RACE_MAX_MINUTES, RACE_MIN_MINUTES, UI_BAD_ON_LIGHT,
+                            UI_GOOD_ON_LIGHT, UI_MUTED_ON_LIGHT)
 from core.game_state import GameScreen
 from net.discovery import local_addresses
 from net.protocol import COUNTDOWN, GAME_PORT
@@ -45,6 +46,18 @@ class LobbyScreen(BaseScreen):
         self.address_label = make_label(role="caption", wrap=True)
         layout.addWidget(self.address_label)
         layout.addWidget(make_divider())
+
+        length_row = QHBoxLayout()
+        length_row.setSpacing(GAP)
+        length_row.addWidget(make_label("MATCH LENGTH", role="subtitle", align=LEFT))
+        length_row.addStretch()
+        self.shorter_btn = make_button("-", lambda: self.change_minutes(-1), small=True, width=56)
+        self.length_label = make_label(role="heading")
+        self.length_label.setMinimumWidth(130)
+        self.longer_btn = make_button("+", lambda: self.change_minutes(1), small=True, width=56)
+        for widget in (self.shorter_btn, self.length_label, self.longer_btn):
+            length_row.addWidget(widget)
+        layout.addLayout(length_row)
 
         self.count_label = make_label(role="subtitle", align=LEFT)
         layout.addWidget(self.count_label)
@@ -87,7 +100,9 @@ class LobbyScreen(BaseScreen):
         if session is None:
             return
         host = next((p for p in session.players if p.get("host")), None)
-        self.mode_label.setText(f"LOBBY | {mode_text(session.mode)}")
+        self.mode_label.setText(f"LOBBY | {mode_text(session.mode, session.minutes)}")
+        minutes = session.minutes or 0
+        self.length_label.setText(f"{minutes} MIN")
         self.title_label.setText(f"{host['name']}'S LOBBY" if host else "LOBBY")
         self.code_label.setVisible(session.is_host)
         self.address_label.setVisible(session.is_host)
@@ -116,6 +131,10 @@ class LobbyScreen(BaseScreen):
         counting = session.state == COUNTDOWN
         self.start_btn.setVisible(session.is_host)
         self.start_btn.setEnabled(ready and not counting)
+        for button in (self.shorter_btn, self.longer_btn):
+            button.setVisible(session.is_host)
+        self.shorter_btn.setEnabled(not counting and minutes > RACE_MIN_MINUTES)
+        self.longer_btn.setEnabled(not counting and minutes < RACE_MAX_MINUTES)
         if not counting:
             self.stop_countdown()
             if not ready:
@@ -125,6 +144,14 @@ class LobbyScreen(BaseScreen):
             else:
                 self.show_status("WAITING FOR THE HOST TO START")
 
+    def change_minutes(self, step: int):
+        session = self.session
+        if session is None or not session.is_host or session.state == COUNTDOWN:
+            return
+        minutes = max(RACE_MIN_MINUTES, min(RACE_MAX_MINUTES, (session.minutes or 0) + step))
+        if minutes != session.minutes:
+            session.set_minutes(minutes)
+
     def show_status(self, text: str, error: bool = False, good: bool = False):
         set_text_color(self.status_label, UI_BAD_ON_LIGHT if error
                        else UI_GOOD_ON_LIGHT if good else UI_MUTED_ON_LIGHT)
@@ -133,6 +160,8 @@ class LobbyScreen(BaseScreen):
     def start_countdown(self, seconds: float):
         self.countdown_deadline = time.monotonic() + seconds
         self.start_btn.setEnabled(False)
+        self.shorter_btn.setEnabled(False)
+        self.longer_btn.setEnabled(False)
         self.countdown_timer.start()
         self.update_countdown()
 

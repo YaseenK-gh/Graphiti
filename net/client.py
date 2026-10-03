@@ -48,6 +48,7 @@ class LobbyClient(QObject):
         self.state = LOBBY
         self.players: List[dict] = []
         self.min_players = 2
+        self.minutes = 0
         self.max_players = 20
         self.rows: List[dict] = []
         self.deadline: Optional[float] = None
@@ -71,6 +72,9 @@ class LobbyClient(QObject):
 
     def start(self):
         self.send({"t": "start"})
+
+    def set_minutes(self, minutes: int):
+        self.send({"t": "length", "minutes": int(minutes)})
 
     def submit(self, index: int, data):
         self.send({"t": "submit", "index": index, "data": data})
@@ -129,6 +133,7 @@ class LobbyClient(QObject):
     def _on_lobby(self, message: dict):
         self.players = list(message.get("players", []))
         self.mode = message.get("mode", self.mode)
+        self.minutes = message.get("minutes", self.minutes)
         self.min_players = message.get("min", self.min_players)
         self.max_players = message.get("max", self.max_players)
         state = message.get("state", LOBBY)
