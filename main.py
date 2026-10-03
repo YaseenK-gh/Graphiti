@@ -7,6 +7,7 @@ os.environ.setdefault("QT_FFMPEG_DEBUG", "0")
 
 from PySide6.QtWidgets import QApplication
 
+from ui.console import TerminalCommands
 from ui.main_window import MainWindow
 
 
@@ -16,6 +17,7 @@ def main():
     app.setApplicationName("Graphiti")
     window = MainWindow()
     window.show()
+    TerminalCommands(window).start()
     sys.exit(app.exec())
 
 
