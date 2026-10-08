@@ -1,0 +1,28 @@
+Graphiti
+Copyright (c) 2026 YaseenK-gh. All rights reserved.
+
+This repository is public so that the game can be played and its source code
+can be read. It is not open source.
+
+You may:
+  - view the source code, and fork the repository on GitHub as GitHub's Terms
+    of Service allow;
+  - download and run the official builds of the game for your own personal,
+    non-commercial play.
+
+You may not, without prior written permission from the copyright holder:
+  - copy, modify, merge, publish or redistribute the source code or the game,
+    in whole or in part;
+  - sell the game or anything built from it, or use it commercially in any
+    other way;
+  - reuse the game's name, artwork or other original assets.
+
+Third-party material is not covered by this notice and stays under its own
+terms. This includes the music, the fonts and the Qt / PySide6 libraries.
+See CREDITS.md.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR ITS USE.

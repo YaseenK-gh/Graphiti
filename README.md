@@ -56,6 +56,8 @@ Written in Python with PySide6. The code is split into `algorithms/` (graph gene
 python -m unittest
 ```
 
-Music and font credits are in [CREDITS.md](CREDITS.md).
-
 This game was developed by https://github.com/YaseenK-gh with the help of https://github.com/abm64180-bit and https://github.com/rodela-007 .
+
+## License
+
+All rights reserved. You're welcome to play the game and read the code, but not to reuse, redistribute or sell it. Details are in [LICENSE](LICENSE); music, font and library credits are in [CREDITS.md](CREDITS.md).
