@@ -57,3 +57,5 @@ python -m unittest
 ```
 
 Music and font credits are in [CREDITS.md](CREDITS.md).
+
+This game was developed by https://github.com/YaseenK-gh with the help of https://github.com/abm64180-bit and https://github.com/rodela-007 .
